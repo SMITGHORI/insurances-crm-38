@@ -41,6 +41,7 @@ router.use(authMiddleware);
  * @query   page, limit, status, insuranceType, agentId, clientId, search, sortBy, sortOrder
  */
 router.get('/',
+  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
   validationMiddleware(queryParamsSchema, 'query'),
   getQuotations
 );
@@ -51,7 +52,7 @@ router.get('/',
  * @access  Private (All roles with role-based filtering)
  */
 router.post('/export',
-  roleMiddleware(['super_admin', 'manager', 'agent']),
+  roleMiddleware(['manager', 'admin', 'super_admin']),
   validationMiddleware(quotationExportValidation),
   exportQuotations
 );
@@ -63,6 +64,7 @@ router.post('/export',
  * @query   period, agentId
  */
 router.get('/stats',
+  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
   getQuotationsStats
 );
 
@@ -74,6 +76,7 @@ router.get('/stats',
  * @query   limit
  */
 router.get('/search/:query',
+  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
   searchQuotations
 );
 
@@ -84,7 +87,7 @@ router.get('/search/:query',
  * @body    Quotation data according to createQuotationSchema
  */
 router.post('/',
-  roleMiddleware(['agent', 'manager', 'super_admin']),
+  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
   validationMiddleware(createQuotationSchema),
   createQuotation
 );
@@ -96,6 +99,7 @@ router.post('/',
  * @param   id - Quotation ID
  */
 router.get('/:id',
+  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
   getQuotationById
 );
 

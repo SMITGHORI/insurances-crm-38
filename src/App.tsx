@@ -7,6 +7,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { PermissionsProvider } from '@/contexts/PermissionsContext';
 import MainLayout from '@/components/layout/MainLayout';
 import RouteGuard from '@/components/RouteGuard';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 // Import pages
 import Dashboard from '@/pages/Dashboard';
@@ -74,55 +75,179 @@ function App() {
                   <Route path="dashboard" element={<Dashboard />} />
                   
                   {/* Client routes */}
-                  <Route path="clients" element={<Clients />} />
-                  <Route path="clients/:id" element={<ClientDetails />} />
-                  <Route path="clients/:id/edit" element={<ClientEdit />} />
+                  <Route path="clients" element={
+                    <ProtectedRoute module="clients" action="view">
+                      <Clients />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="clients/:id" element={
+                    <ProtectedRoute module="clients" action="view">
+                      <ClientDetails />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="clients/:id/edit" element={
+                    <ProtectedRoute module="clients" action="edit">
+                      <ClientEdit />
+                    </ProtectedRoute>
+                  } />
                   
                   {/* Agent routes */}
-                  <Route path="agents" element={<Agents />} />
-                  <Route path="agents/create" element={<AgentCreate />} />
-                  <Route path="agents/:id" element={<AgentDetails />} />
+                  <Route path="agents" element={
+                    <ProtectedRoute module="agents" action="view">
+                      <Agents />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="agents/create" element={
+                    <ProtectedRoute module="agents" action="create">
+                      <AgentCreate />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="agents/:id" element={
+                    <ProtectedRoute module="agents" action="view">
+                      <AgentDetails />
+                    </ProtectedRoute>
+                  } />
                   
                   {/* Policy routes */}
-                  <Route path="policies" element={<Policies />} />
-                  <Route path="policies/create" element={<PolicyCreate />} />
-                  <Route path="policies/:id" element={<PolicyDetails />} />
-                  <Route path="policies/:id/edit" element={<PolicyEdit />} />
+                  <Route path="policies" element={
+                    <ProtectedRoute module="policies" action="view">
+                      <Policies />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="policies/create" element={
+                    <ProtectedRoute module="policies" action="create">
+                      <PolicyCreate />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="policies/:id" element={
+                    <ProtectedRoute module="policies" action="view">
+                      <PolicyDetails />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="policies/:id/edit" element={
+                    <ProtectedRoute module="policies" action="edit">
+                      <PolicyEdit />
+                    </ProtectedRoute>
+                  } />
                   
                   {/* Claim routes */}
-                  <Route path="claims" element={<Claims />} />
-                  <Route path="claims/create" element={<ClaimCreate />} />
-                  <Route path="claims/:id" element={<ClaimDetails />} />
-                  <Route path="claims/:id/edit" element={<ClaimEdit />} />
+                  <Route path="claims" element={
+                    <ProtectedRoute module="claims" action="view">
+                      <Claims />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="claims/create" element={
+                    <ProtectedRoute module="claims" action="create">
+                      <ClaimCreate />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="claims/:id" element={
+                    <ProtectedRoute module="claims" action="view">
+                      <ClaimDetails />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="claims/:id/edit" element={
+                    <ProtectedRoute module="claims" action="edit">
+                      <ClaimEdit />
+                    </ProtectedRoute>
+                  } />
                   
                   {/* Lead routes */}
-                  <Route path="leads" element={<Leads />} />
-                  <Route path="leads/create" element={<LeadForm />} />
-                  <Route path="leads/:id" element={<LeadDetails />} />
-                  <Route path="leads/:id/edit" element={<LeadForm />} />
+                  <Route path="leads" element={
+                    <ProtectedRoute module="leads" action="view">
+                      <Leads />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="leads/create" element={
+                    <ProtectedRoute module="leads" action="create">
+                      <LeadForm />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="leads/:id" element={
+                    <ProtectedRoute module="leads" action="view">
+                      <LeadDetails />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="leads/:id/edit" element={
+                    <ProtectedRoute module="leads" action="edit">
+                      <LeadForm />
+                    </ProtectedRoute>
+                  } />
                   
                   {/* Quotation routes */}
-                  <Route path="quotations" element={<Quotations />} />
-                  <Route path="quotations/dashboard" element={<QuotesDashboardPage />} />
-                  <Route path="quotations/create" element={<QuotationForm />} />
-                  <Route path="quotations/lead/:leadId" element={<QuotationsPage />} />
-                  <Route path="quotations/quote/:quotationId" element={<QuotationsPage />} />
+                  <Route path="quotations" element={
+                    <ProtectedRoute module="quotations" action="view">
+                      <Quotations />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="quotations/dashboard" element={
+                    <ProtectedRoute module="quotations" action="view">
+                      <QuotesDashboardPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="quotations/create" element={
+                    <ProtectedRoute module="quotations" action="create">
+                      <QuotationForm />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="quotations/lead/:leadId" element={
+                    <ProtectedRoute module="quotations" action="view">
+                      <QuotationsPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="quotations/quote/:quotationId" element={
+                    <ProtectedRoute module="quotations" action="view">
+                      <QuotationsPage />
+                    </ProtectedRoute>
+                  } />
                   {/* Redirect old quotation detail route to new format */}
                   <Route path="quotations/:id" element={<Navigate to={`/quotations/quote/${window.location.pathname.split('/').pop()}`} replace />} />
-                  <Route path="quotations/:id/edit" element={<QuotationEdit />} />
+                  <Route path="quotations/:id/edit" element={
+                    <ProtectedRoute module="quotations" action="edit">
+                      <QuotationEdit />
+                    </ProtectedRoute>
+                  } />
                   
                   {/* Invoice routes */}
-                  <Route path="invoices" element={<Invoices />} />
-                  <Route path="invoices/create" element={<InvoiceForm />} />
-                  <Route path="invoices/:id" element={<InvoiceDetails />} />
-                  <Route path="invoices/:id/edit" element={<InvoiceEdit />} />
+                  <Route path="invoices" element={
+                    <ProtectedRoute module="invoices" action="view">
+                      <Invoices />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="invoices/create" element={
+                    <ProtectedRoute module="invoices" action="create">
+                      <InvoiceForm />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="invoices/:id" element={
+                    <ProtectedRoute module="invoices" action="view">
+                      <InvoiceDetails />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="invoices/:id/edit" element={
+                    <ProtectedRoute module="invoices" action="edit">
+                      <InvoiceEdit />
+                    </ProtectedRoute>
+                  } />
                   
                   {/* Communication routes */}
-                  <Route path="communication" element={<Communication />} />
-                  <Route path="broadcast" element={<Broadcast />} />
+                  <Route path="communication" element={
+                    <ProtectedRoute module="offers" action="view">
+                      <Communication />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="broadcast" element={
+                    <ProtectedRoute module="offers" action="create">
+                      <Broadcast />
+                    </ProtectedRoute>
+                  } />
                   
                   {/* Other routes */}
-                  <Route path="recent-activities" element={<RecentActivities />} />
+                  <Route path="recent-activities" element={
+                    <ProtectedRoute module="activities" action="view">
+                      <RecentActivities />
+                    </ProtectedRoute>
+                  } />
                   <Route path="settings" element={<Settings />} />
                 </Route>
                 
