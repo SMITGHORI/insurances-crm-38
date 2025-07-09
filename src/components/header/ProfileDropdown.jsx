@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -9,137 +9,207 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { 
   User, 
   Settings, 
-  HelpCircle, 
   LogOut, 
   Shield, 
+  Activity,
+  Clock,
   Bell,
-  Palette,
-  ChevronDown
+  HelpCircle
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePermissions } from '@/contexts/PermissionsContext';
+import { useNavigate } from 'react-router-dom';
+import { headerBackendApi } from '@/services/api/headerApiBackend';
 import { toast } from 'sonner';
 
 const ProfileDropdown = () => {
-  const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { isSuperAdmin, isAgent, hasPermission } = usePermissions();
+  const navigate = useNavigate();
+  const [profileData, setProfileData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Load profile data on component mount
+  useEffect(() => {
+    if (user) {
+      loadProfileData();
+    }
+  }, [user]);
+
+  const loadProfileData = async () => {
+    try {
+      setLoading(true);
+      const data = await headerBackendApi.getProfileData();
+      setProfileData(data);
+    } catch (error) {
+      console.error('Failed to load profile data:', error);
+      // Use auth context user as fallback
+      setProfileData(user);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
       await logout();
       toast.success('Logged out successfully');
-      navigate('/auth');
+      navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
-      toast.error('Logout failed. Please try again.');
+      toast.error('Failed to logout');
     }
   };
 
-  const handleProfileEdit = () => {
+  const handleProfileClick = () => {
     navigate('/settings');
   };
 
-  const handleSecuritySettings = () => {
-    if (hasPermission('manageSettings')) {
-      navigate('/settings');
-    } else {
-      toast.error('You do not have permission to access security settings');
+  const handleActivityClick = () => {
+    navigate('/recent-activities');
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
+  const getRoleBadgeVariant = (role) => {
+    switch (role) {
+      case 'super_admin':
+        return 'destructive';
+      case 'manager':
+        return 'default';
+      case 'agent':
+        return 'secondary';
+      default:
+        return 'outline';
     }
   };
 
-  const handleNotificationSettings = () => {
-    navigate('/settings');
+  const formatRole = (role) => {
+    return role?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'User';
   };
 
-  const handleHelp = () => {
-    console.log('Opening help center');
-    toast.info('Help center coming soon!');
-  };
+  const currentUser = profileData || user;
 
-  const getRoleBadge = () => {
-    if (isSuperAdmin()) {
-      return (
-        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full w-fit">
-          Super Admin
-        </span>
-      );
-    } else if (isAgent()) {
-      return (
-        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full w-fit">
-          Agent
-        </span>
-      );
-    }
+  if (!currentUser) {
     return null;
-  };
+  }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button 
           variant="ghost" 
-          className="flex items-center space-x-2 h-auto p-1 text-sm font-medium text-gray-700 hover:text-amba-blue"
+          className="flex items-center space-x-2 h-auto p-2 rounded-full hover:bg-gray-100"
+          disabled={loading}
         >
-          <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
-            <AvatarImage 
-              src="https://randomuser.me/api/portraits/men/32.jpg" 
-              alt={user?.name || 'User'} 
-            />
-            <AvatarFallback>
-              {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
+            <AvatarFallback className="text-xs">
+              {getInitials(currentUser.name)}
             </AvatarFallback>
           </Avatar>
-          <div className="hidden md:flex items-center space-x-1">
-            <span className="max-w-[120px] truncate">
-              {user?.name || 'Rahul Sharma'}
-            </span>
-            <ChevronDown className="h-3 w-3" />
+          <div className="hidden md:block text-left">
+            <div className="text-sm font-medium text-gray-900">
+              {currentUser.name}
+            </div>
+            <div className="text-xs text-gray-500">
+              {formatRole(currentUser.role)}
+            </div>
           </div>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end">
+      <DropdownMenuContent className="w-64" align="end">
         <DropdownMenuLabel>
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium">{user?.name || 'Rahul Sharma'}</p>
-            <p className="text-xs text-gray-500">{user?.email || 'rahul@ambainsurance.com'}</p>
-            {getRoleBadge()}
+          <div className="flex items-center space-x-3">
+            <Avatar className="h-12 w-12">
+              <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
+              <AvatarFallback>
+                {getInitials(currentUser.name)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <div className="font-medium text-gray-900">
+                {currentUser.name}
+              </div>
+              <div className="text-sm text-gray-500">
+                {currentUser.email}
+              </div>
+              <div className="flex items-center space-x-2 mt-1">
+                <Badge variant={getRoleBadgeVariant(currentUser.role)} className="text-xs">
+                  {formatRole(currentUser.role)}
+                </Badge>
+                {currentUser.isOnline && (
+                  <div className="flex items-center space-x-1">
+                    <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                    <span className="text-xs text-gray-500">Online</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </DropdownMenuLabel>
+        
+        {currentUser.jobTitle && (
+          <>
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1">
+              <div className="text-xs text-gray-500">Job Title</div>
+              <div className="text-sm font-medium">{currentUser.jobTitle}</div>
+            </div>
+          </>
+        )}
+
+        {currentUser.lastActivity && (
+          <div className="px-2 py-1">
+            <div className="flex items-center space-x-1 text-xs text-gray-500">
+              <Clock className="h-3 w-3" />
+              <span>Last active: {new Date(currentUser.lastActivity).toLocaleDateString()}</span>
+            </div>
+          </div>
+        )}
+        
         <DropdownMenuSeparator />
         
-        <DropdownMenuItem onClick={handleProfileEdit} className="cursor-pointer">
+        <DropdownMenuItem onClick={handleProfileClick} className="cursor-pointer">
           <User className="mr-2 h-4 w-4" />
-          <span>Profile Settings</span>
+          <span>Profile & Settings</span>
         </DropdownMenuItem>
         
-        {hasPermission('manageSettings') && (
-          <DropdownMenuItem onClick={handleSecuritySettings} className="cursor-pointer">
+        <DropdownMenuItem onClick={handleActivityClick} className="cursor-pointer">
+          <Activity className="mr-2 h-4 w-4" />
+          <span>Recent Activity</span>
+        </DropdownMenuItem>
+
+        {(currentUser.role === 'super_admin' || currentUser.role === 'manager') && (
+          <DropdownMenuItem 
+            onClick={() => navigate('/settings')} 
+            className="cursor-pointer"
+          >
             <Shield className="mr-2 h-4 w-4" />
-            <span>Security</span>
+            <span>Admin Settings</span>
           </DropdownMenuItem>
         )}
         
-        <DropdownMenuItem onClick={handleNotificationSettings} className="cursor-pointer">
+        <DropdownMenuItem 
+          onClick={() => navigate('/settings')} 
+          className="cursor-pointer"
+        >
           <Bell className="mr-2 h-4 w-4" />
           <span>Notifications</span>
         </DropdownMenuItem>
         
-        {!isAgent() && (
-          <DropdownMenuItem className="cursor-pointer">
-            <Palette className="mr-2 h-4 w-4" />
-            <span>Appearance</span>
-          </DropdownMenuItem>
-        )}
-        
-        <DropdownMenuSeparator />
-        
-        <DropdownMenuItem onClick={handleHelp} className="cursor-pointer">
+        <DropdownMenuItem className="cursor-pointer">
           <HelpCircle className="mr-2 h-4 w-4" />
           <span>Help & Support</span>
         </DropdownMenuItem>
@@ -147,7 +217,7 @@ const ProfileDropdown = () => {
         <DropdownMenuSeparator />
         
         <DropdownMenuItem 
-          onClick={handleLogout} 
+          onClick={handleLogout}
           className="cursor-pointer text-red-600 focus:text-red-600"
         >
           <LogOut className="mr-2 h-4 w-4" />
