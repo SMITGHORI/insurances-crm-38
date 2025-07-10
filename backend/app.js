@@ -1,4 +1,3 @@
-
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -8,23 +7,14 @@ const { globalErrorHandler } = require('./utils/errorHandler');
 
 // Import routes
 const authRoutes = require('./routes/auth');
-const settingsRoutes = require('./routes/settings');
 const clientRoutes = require('./routes/clients');
-const leadRoutes = require('./routes/leads');
-const policyRoutes = require('./routes/policies');
-const claimRoutes = require('./routes/claims');
-const quotationRoutes = require('./routes/quotations');
-const agentRoutes = require('./routes/agents');
+const quotationRoutes = require('./routes/quotations'); 
 const invoiceRoutes = require('./routes/invoices');
-const activityRoutes = require('./routes/activities');
 const communicationRoutes = require('./routes/communication');
 const broadcastRoutes = require('./routes/broadcast');
 const enhancedBroadcastRoutes = require('./routes/enhancedBroadcast');
+const userRoutes = require('./routes/users');
 const dashboardRoutes = require('./routes/dashboard');
-const headerRoutes = require('./routes/header');
-const developerRoutes = require('./routes/developerRoutes');
-const roleRoutes = require('./routes/roleRoutes');
-const campaignRoutes = require('./routes/campaigns');
 
 const app = express();
 
@@ -81,25 +71,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API routes
+// Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/settings', settingsRoutes);
 app.use('/api/clients', clientRoutes);
-app.use('/api/leads', leadRoutes);
-app.use('/api/policies', policyRoutes);
-app.use('/api/claims', claimRoutes);
 app.use('/api/quotations', quotationRoutes);
-app.use('/api/agents', agentRoutes);
 app.use('/api/invoices', invoiceRoutes);
-app.use('/api/activities', activityRoutes);
 app.use('/api/communication', communicationRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 app.use('/api/enhanced-broadcast', enhancedBroadcastRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/header', headerRoutes);
-app.use('/api/developer', developerRoutes);
-app.use('/api/roles', roleRoutes);
-app.use('/api/campaigns', campaignRoutes);
 
 // 404 handler
 app.all('*', (req, res, next) => {

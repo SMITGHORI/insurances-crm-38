@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -8,9 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Send, Eye, Calendar, Users } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CalendarIcon, Users, Mail, MessageSquare, Send, Eye, Target } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import { useCreateBroadcast, useEligibleClients } from '@/hooks/useBroadcast';
-const BroadcastCreator = () => {
+
+const BroadcastCreator = ({ onSuccess }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -25,60 +32,40 @@ const BroadcastCreator = () => {
       tierLevels: [],
       locations: []
     },
-    scheduledAt: ''
+    scheduledAt: null
   });
+
+  const [previewMode, setPreviewMode] = useState(false);
   const [eligibleClients, setEligibleClients] = useState([]);
-  const [showPreview, setShowPreview] = useState(false);
-  const createBroadcast = useCreateBroadcast();
-  const getEligibleClients = useEligibleClients();
-  const broadcastTypes = [{
-    value: 'offer',
-    label: 'Special Offer'
-  }, {
-    value: 'festival',
-    label: 'Festival Greeting'
-  }, {
-    value: 'announcement',
-    label: 'Announcement'
-  }, {
-    value: 'promotion',
-    label: 'Promotion'
-  }, {
-    value: 'newsletter',
-    label: 'Newsletter'
-  }, {
-    value: 'reminder',
-    label: 'Reminder'
-  }];
-  const clientTypes = [{
-    value: 'individual',
-    label: 'Individual'
-  }, {
-    value: 'corporate',
-    label: 'Corporate'
-  }, {
-    value: 'group',
-    label: 'Group'
-  }];
-  const tierLevels = [{
-    value: 'bronze',
-    label: 'Bronze'
-  }, {
-    value: 'silver',
-    label: 'Silver'
-  }, {
-    value: 'gold',
-    label: 'Gold'
-  }, {
-    value: 'platinum',
-    label: 'Platinum'
-  }];
+  const [showEligibleClients, setShowEligibleClients] = useState(false);
+
+  const createBroadcastMutation = useCreateBroadcast();
+  const eligibleClientsMutation = useEligibleClients();
+
+  const broadcastTypes = [
+    { value: 'offer', label: 'Special Offer' },
+    { value: 'festival', label: 'Festival Greeting' },
+    { value: 'announcement', label: 'Announcement' },
+    { value: 'promotion', label: 'Promotion' },
+    { value: 'newsletter', label: 'Newsletter' },
+    { value: 'reminder', label: 'Reminder' }
+  ];
+
+  const channels = [
+    { value: 'email', label: 'Email', icon: Mail },
+    { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare }
+  ];
+
+  const clientTypes = ['individual', 'corporate', 'group'];
+  const tierLevels = ['bronze', 'silver', 'gold', 'platinum'];
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
   };
+
   const handleTargetAudienceChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -88,46 +75,45 @@ const BroadcastCreator = () => {
       }
     }));
   };
-  const handleChannelChange = (channel, checked) => {
+
+  const handleChannelToggle = (channel) => {
     setFormData(prev => ({
       ...prev,
-      channels: checked ? [...prev.channels, channel] : prev.channels.filter(c => c !== channel)
+      channels: prev.channels.includes(channel)
+        ? prev.channels.filter(c => c !== channel)
+        : [...prev.channels, channel]
     }));
   };
-  const handleArrayFieldChange = (field, value, checked) => {
-    setFormData(prev => ({
-      ...prev,
-      targetAudience: {
-        ...prev.targetAudience,
-        [field]: checked ? [...prev.targetAudience[field], value] : prev.targetAudience[field].filter(item => item !== value)
-      }
-    }));
-  };
-  const handlePreviewClients = async () => {
-    if (formData.channels.length === 0) {
-      toast.error('Please select at least one communication channel');
-      return;
-    }
+
+  const handleCheckEligibleClients = async () => {
     try {
-      const response = await getEligibleClients.mutateAsync({
+      const result = await eligibleClientsMutation.mutateAsync({
         targetAudience: formData.targetAudience,
         channels: formData.channels
       });
-      setEligibleClients(response.data || []);
-      setShowPreview(true);
+      setEligibleClients(result.data || []);
+      setShowEligibleClients(true);
     } catch (error) {
-      console.error('Error fetching eligible clients:', error);
+      toast.error('Failed to fetch eligible clients');
     }
   };
-  const handleSubmit = async e => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
     if (!formData.title || !formData.content || formData.channels.length === 0) {
       toast.error('Please fill in all required fields');
       return;
     }
-    try {
-      await createBroadcast.mutateAsync(formData);
 
+    if (formData.channels.includes('email') && !formData.subject) {
+      toast.error('Email subject is required when email channel is selected');
+      return;
+    }
+
+    try {
+      await createBroadcastMutation.mutateAsync(formData);
+      onSuccess?.();
       // Reset form
       setFormData({
         title: '',
@@ -143,159 +129,317 @@ const BroadcastCreator = () => {
           tierLevels: [],
           locations: []
         },
-        scheduledAt: ''
+        scheduledAt: null
       });
-      setEligibleClients([]);
-      setShowPreview(false);
     } catch (error) {
-      console.error('Error creating broadcast:', error);
+      // Error is handled by the mutation
     }
   };
-  return <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="title">Title *</Label>
-            <Input id="title" value={formData.title} onChange={e => handleInputChange('title', e.target.value)} placeholder="Enter broadcast title" required />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="type">Type *</Label>
-            <Select value={formData.type} onValueChange={value => handleInputChange('type', value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select broadcast type" />
-              </SelectTrigger>
-              <SelectContent>
-                {broadcastTypes.map(type => <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+
+  const getPersonalizedPreview = () => {
+    let preview = formData.content;
+    preview = preview.replace(/{{name}}/g, 'John Doe');
+    preview = preview.replace(/{{firstName}}/g, 'John');
+    preview = preview.replace(/{{email}}/g, 'john@example.com');
+    preview = preview.replace(/{{phone}}/g, '+91 9876543210');
+    return preview;
+  };
+
+  if (previewMode) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold">Broadcast Preview</h3>
+          <Button variant="outline" onClick={() => setPreviewMode(false)}>
+            Back to Edit
+          </Button>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="description">Description</Label>
-          <Input id="description" value={formData.description} onChange={e => handleInputChange('description', e.target.value)} placeholder="Brief description of the broadcast" />
-        </div>
-
-        {/* Communication Channels */}
-        <div className="space-y-2">
-          <Label>Communication Channels *</Label>
-          <div className="flex gap-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox id="email" checked={formData.channels.includes('email')} onCheckedChange={checked => handleChannelChange('email', checked)} />
-              <Label htmlFor="email">Email</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="whatsapp" checked={formData.channels.includes('whatsapp')} onCheckedChange={checked => handleChannelChange('whatsapp', checked)} />
-              <Label htmlFor="whatsapp">WhatsApp</Label>
-            </div>
-          </div>
-        </div>
-
-        {/* Email Subject (if email is selected) */}
-        {formData.channels.includes('email') && <div className="space-y-2">
-            <Label htmlFor="subject">Email Subject *</Label>
-            <Input id="subject" value={formData.subject} onChange={e => handleInputChange('subject', e.target.value)} placeholder="Enter email subject" required />
-          </div>}
-
-        {/* Content */}
-        <div className="space-y-2">
-          <Label htmlFor="content">Message Content *</Label>
-          <Textarea id="content" value={formData.content} onChange={e => handleInputChange('content', e.target.value)} placeholder="Enter your message content. Use placeholders like {{name}}, {{firstName}} for personalization" className="min-h-32" required />
-          <p className="text-sm text-muted-foreground">
-            Use placeholders: {`{{name}}, {{firstName}}, {{email}}, {{phone}}`} for personalization
-          </p>
-        </div>
-
-        {/* Target Audience */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Target Audience</CardTitle>
-            <CardDescription>Select who should receive this broadcast</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Badge variant="outline">{formData.type}</Badge>
+              {formData.title}
+            </CardTitle>
+            <CardDescription>{formData.description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox id="allClients" checked={formData.targetAudience.allClients} onCheckedChange={checked => handleTargetAudienceChange('allClients', checked)} />
-              <Label htmlFor="allClients">All Active Clients</Label>
+            <div>
+              <Label className="text-sm font-medium">Channels:</Label>
+              <div className="flex gap-2 mt-1">
+                {formData.channels.map(channel => {
+                  const channelData = channels.find(c => c.value === channel);
+                  const Icon = channelData?.icon;
+                  return (
+                    <Badge key={channel} variant="secondary" className="flex items-center gap-1">
+                      {Icon && <Icon className="h-3 w-3" />}
+                      {channelData?.label}
+                    </Badge>
+                  );
+                })}
+              </div>
             </div>
 
-            {!formData.targetAudience.allClients && <div className="space-y-4 pl-6">
-                {/* Client Types */}
-                <div className="space-y-2">
-                  <Label>Client Types</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {clientTypes.map(type => <div key={type.value} className="flex items-center space-x-2">
-                        <Checkbox id={`clientType-${type.value}`} checked={formData.targetAudience.clientTypes.includes(type.value)} onCheckedChange={checked => handleArrayFieldChange('clientTypes', type.value, checked)} />
-                        <Label htmlFor={`clientType-${type.value}`}>{type.label}</Label>
-                      </div>)}
-                  </div>
-                </div>
+            {formData.channels.includes('email') && formData.subject && (
+              <div>
+                <Label className="text-sm font-medium">Email Subject:</Label>
+                <p className="text-sm bg-gray-50 p-2 rounded mt-1">{formData.subject}</p>
+              </div>
+            )}
 
-                {/* Tier Levels */}
-                
-              </div>}
+            <div>
+              <Label className="text-sm font-medium">Content Preview:</Label>
+              <div className="bg-gray-50 p-4 rounded-lg mt-1 whitespace-pre-wrap">
+                {getPersonalizedPreview()}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={handleSubmit} disabled={createBroadcastMutation.isPending}>
+                <Send className="h-4 w-4 mr-2" />
+                {createBroadcastMutation.isPending ? 'Creating...' : 'Create Broadcast'}
+              </Button>
+              <Button variant="outline" onClick={() => setPreviewMode(false)}>
+                Edit
+              </Button>
+            </div>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
 
-        {/* Schedule */}
-        <div className="space-y-2">
-          <Label htmlFor="scheduledAt">Schedule (Optional)</Label>
-          <Input id="scheduledAt" type="datetime-local" value={formData.scheduledAt} onChange={e => handleInputChange('scheduledAt', e.target.value)} min={new Date().toISOString().slice(0, 16)} />
-          <p className="text-sm text-muted-foreground">
-            Leave empty to send immediately
-          </p>
-        </div>
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold">Create New Broadcast</h3>
+        <Button type="button" variant="outline" onClick={() => setPreviewMode(true)}>
+          <Eye className="h-4 w-4 mr-2" />
+          Preview
+        </Button>
+      </div>
 
-        {/* Actions */}
-        <div className="flex gap-4">
-          <Button type="button" variant="outline" onClick={handlePreviewClients} disabled={getEligibleClients.isPending} className="flex items-center gap-2">
-            <Eye className="h-4 w-4" />
-            Preview Recipients ({eligibleClients.length})
-          </Button>
-          
-          <Button type="submit" disabled={createBroadcast.isPending} className="flex items-center gap-2">
-            {formData.scheduledAt ? <>
-                <Calendar className="h-4 w-4" />
-                Schedule Broadcast
-              </> : <>
-                <Send className="h-4 w-4" />
-                Send Now
-              </>}
-          </Button>
-        </div>
-      </form>
+      <Tabs defaultValue="basic" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="basic">Basic Info</TabsTrigger>
+          <TabsTrigger value="content">Content</TabsTrigger>
+          <TabsTrigger value="audience">Target Audience</TabsTrigger>
+          <TabsTrigger value="schedule">Schedule</TabsTrigger>
+        </TabsList>
 
-      {/* Preview Recipients */}
-      {showPreview && <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Eligible Recipients ({eligibleClients.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {eligibleClients.length > 0 ? <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto">
-                {eligibleClients.map(client => <div key={client._id} className="p-3 border rounded-lg">
-                    <h4 className="font-medium">{client.displayName}</h4>
-                    <p className="text-sm text-muted-foreground">{client.email}</p>
-                    <p className="text-sm text-muted-foreground">{client.phone}</p>
-                    <div className="flex gap-1 mt-2">
-                      <Badge variant="outline" className="text-xs">
-                        {client.clientType}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {client.tierLevel || 'bronze'}
-                      </Badge>
+        <TabsContent value="basic" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="title">Title *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => handleInputChange('title', e.target.value)}
+                placeholder="Enter broadcast title"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="type">Type *</Label>
+              <Select value={formData.type} onValueChange={(value) => handleInputChange('type', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select broadcast type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {broadcastTypes.map(type => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => handleInputChange('description', e.target.value)}
+              placeholder="Brief description of the broadcast"
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <Label>Channels *</Label>
+            <div className="flex gap-4 mt-2">
+              {channels.map(channel => {
+                const Icon = channel.icon;
+                return (
+                  <div key={channel.value} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={channel.value}
+                      checked={formData.channels.includes(channel.value)}
+                      onCheckedChange={() => handleChannelToggle(channel.value)}
+                    />
+                    <Label htmlFor={channel.value} className="flex items-center gap-2 cursor-pointer">
+                      <Icon className="h-4 w-4" />
+                      {channel.label}
+                    </Label>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="content" className="space-y-4">
+          {formData.channels.includes('email') && (
+            <div>
+              <Label htmlFor="subject">Email Subject *</Label>
+              <Input
+                id="subject"
+                value={formData.subject}
+                onChange={(e) => handleInputChange('subject', e.target.value)}
+                placeholder="Enter email subject line"
+                required={formData.channels.includes('email')}
+              />
+            </div>
+          )}
+
+          <div>
+            <Label htmlFor="content">Message Content *</Label>
+            <Textarea
+              id="content"
+              value={formData.content}
+              onChange={(e) => handleInputChange('content', e.target.value)}
+              placeholder="Enter your message content. You can use {{name}}, {{firstName}}, {{email}}, {{phone}} for personalization"
+              rows={8}
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Use placeholders: {{name}}, {{firstName}}, {{email}}, {{phone}} for personalization
+            </p>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="audience" className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="allClients"
+              checked={formData.targetAudience.allClients}
+              onCheckedChange={(checked) => handleTargetAudienceChange('allClients', checked)}
+            />
+            <Label htmlFor="allClients">Send to all clients</Label>
+          </div>
+
+          {!formData.targetAudience.allClients && (
+            <div className="space-y-4 pl-6">
+              <div>
+                <Label>Client Types</Label>
+                <div className="flex gap-4 mt-2">
+                  {clientTypes.map(type => (
+                    <div key={type} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`clientType-${type}`}
+                        checked={formData.targetAudience.clientTypes.includes(type)}
+                        onCheckedChange={(checked) => {
+                          const newTypes = checked
+                            ? [...formData.targetAudience.clientTypes, type]
+                            : formData.targetAudience.clientTypes.filter(t => t !== type);
+                          handleTargetAudienceChange('clientTypes', newTypes);
+                        }}
+                      />
+                      <Label htmlFor={`clientType-${type}`} className="capitalize">
+                        {type}
+                      </Label>
                     </div>
-                  </div>)}
-              </div> : <p className="text-muted-foreground text-center py-4">
-                No eligible clients found for the selected criteria
-              </p>}
-          </CardContent>
-        </Card>}
-    </div>;
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label>Tier Levels</Label>
+                <div className="flex gap-4 mt-2">
+                  {tierLevels.map(tier => (
+                    <div key={tier} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`tier-${tier}`}
+                        checked={formData.targetAudience.tierLevels.includes(tier)}
+                        onCheckedChange={(checked) => {
+                          const newTiers = checked
+                            ? [...formData.targetAudience.tierLevels, tier]
+                            : formData.targetAudience.tierLevels.filter(t => t !== tier);
+                          handleTargetAudienceChange('tierLevels', newTiers);
+                        }}
+                      />
+                      <Label htmlFor={`tier-${tier}`} className="capitalize">
+                        {tier}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={handleCheckEligibleClients}
+              disabled={eligibleClientsMutation.isPending}
+            >
+              <Target className="h-4 w-4 mr-2" />
+              {eligibleClientsMutation.isPending ? 'Checking...' : 'Check Eligible Clients'}
+            </Button>
+            {showEligibleClients && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                {eligibleClients.length} eligible clients
+              </Badge>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="schedule" className="space-y-4">
+          <div>
+            <Label>Schedule Broadcast</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !formData.scheduledAt && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {formData.scheduledAt ? format(formData.scheduledAt, "PPP") : "Send immediately"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={formData.scheduledAt}
+                  onSelect={(date) => handleInputChange('scheduledAt', date)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      <div className="flex gap-2">
+        <Button type="submit" disabled={createBroadcastMutation.isPending}>
+          <Send className="h-4 w-4 mr-2" />
+          {createBroadcastMutation.isPending ? 'Creating...' : 'Create Broadcast'}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => setPreviewMode(true)}>
+          <Eye className="h-4 w-4 mr-2" />
+          Preview
+        </Button>
+      </div>
+    </form>
+  );
 };
+
 export default BroadcastCreator;

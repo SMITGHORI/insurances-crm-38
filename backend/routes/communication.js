@@ -23,6 +23,9 @@ router.post('/loyalty/:clientId', validationMiddleware(validateLoyaltyPoints), c
 // Offers routes
 router.get('/offers', communicationController.getOffers);
 router.post('/offers', roleMiddleware(['admin', 'manager']), validationMiddleware(validateOffer), communicationController.createOffer);
+router.get('/offers/:offerId', communicationController.getOfferById);
+router.put('/offers/:offerId', roleMiddleware(['admin', 'manager']), validationMiddleware(validateOffer), communicationController.updateOffer);
+router.delete('/offers/:offerId', roleMiddleware(['admin', 'manager']), communicationController.deleteOffer);
 
 // Automation rules routes
 router.get('/automation', roleMiddleware(['admin', 'manager']), communicationController.getAutomationRules);
