@@ -1,63 +1,56 @@
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { Schema } = mongoose;
 
-const userSchema = new mongoose.Schema({
+const UserSchema = new Schema({
   name: {
     type: String,
-    required: [true, 'Name is required'],
+    required: true,
     trim: true,
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    maxlength: 100
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
+    required: true,
     unique: true,
     lowercase: true,
-    trim: true,
-    match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please enter a valid email']
+    trim: true
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
-    minlength: [8, 'Password must be at least 8 characters'],
-    select: false
-  },
-  phone: {
-    type: String,
-    trim: true,
-    maxlength: [20, 'Phone number cannot exceed 20 characters']
+    required: true,
+    minlength: 6
   },
   role: {
     type: String,
-    enum: ['agent', 'manager', 'admin', 'super_admin'],
-    default: 'agent'
+    enum: ['super_admin', 'manager', 'agent', 'user'],
+    default: 'user'
   },
-  jobTitle: {
-    type: String,
-    trim: true,
-    maxlength: [100, 'Job title cannot exceed 100 characters']
+  agentId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Agent'
   },
-  avatar: {
-    type: String,
-    trim: true
-  },
-  status: {
-    type: String,
-    enum: ['active', 'inactive', 'suspended'],
-    default: 'active'
+  isActive: {
+    type: Boolean,
+    default: true
   },
   lastLogin: {
     type: Date
   },
-  permissions: [{
-    type: String
-  }],
-  department: {
+  region: {
     type: String,
     trim: true
   },
-  territory: {
+  permissions: [{
+    type: String,
+    trim: true
+  }],
+  avatar: {
+    type: String,
+    trim: true
+  },
+  phone: {
     type: String,
     trim: true
   },
@@ -65,40 +58,54 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  emailVerificationToken: String,
-  passwordResetToken: String,
-  passwordResetExpires: Date
+  isPhoneVerified: {
+    type: Boolean,
+    default: false
+  },
+  resetPasswordToken: {
+    type: String
+  },
+  resetPasswordExpires: {
+    type: Date
+  },
+  deletedAt: {
+    type: Date
+  }
 }, {
   timestamps: true,
-  versionKey: false
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-// Indexes
-userSchema.index({ email: 1 }, { unique: true });
-userSchema.index({ role: 1 });
-userSchema.index({ status: 1 });
-userSchema.index({ createdAt: -1 });
+// Index for performance
+UserSchema.index({ email: 1 });
+UserSchema.index({ role: 1, isActive: 1 });
 
-// Pre-save middleware to hash password
-userSchema.pre('save', async function(next) {
+// Hash password before saving
+UserSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
-// Instance method to check password
-userSchema.methods.correctPassword = async function(candidatePassword, userPassword) {
-  return await bcrypt.compare(candidatePassword, userPassword);
+// Compare password method
+UserSchema.methods.comparePassword = async function(candidatePassword) {
+  return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Instance method to check if password was changed after JWT was issued
-userSchema.methods.changedPasswordAfter = function(JWTTimestamp) {
-  if (this.passwordChangedAt) {
-    const changedTimestamp = parseInt(this.passwordChangedAt.getTime() / 1000, 10);
-    return JWTTimestamp < changedTimestamp;
-  }
-  return false;
+// Remove password from JSON output
+UserSchema.methods.toJSON = function() {
+  const user = this.toObject();
+  delete user.password;
+  delete user.resetPasswordToken;
+  delete user.resetPasswordExpires;
+  return user;
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', UserSchema);

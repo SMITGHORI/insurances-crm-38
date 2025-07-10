@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,7 @@ import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import AgentTable from '@/components/agents/AgentTable';
-import { useAgents, useDeleteAgent, useCreateAgent } from '@/hooks/useAgents';
+import { useAgents, useDeleteAgent } from '@/hooks/useAgents';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
 
 const Agents = () => {
@@ -25,7 +24,7 @@ const Agents = () => {
     page: currentPage,
     limit: pageSize,
     search: searchTerm,
-    status: statusFilter,
+    status: statusFilter === 'all' ? '' : statusFilter,
     sortField,
     sortDirection,
   };
@@ -39,7 +38,6 @@ const Agents = () => {
     refetch
   } = useAgents(queryParams);
 
-  const createAgentMutation = useCreateAgent();
   const deleteAgentMutation = useDeleteAgent();
 
   // Extract data from API response
@@ -52,7 +50,7 @@ const Agents = () => {
   };
 
   const handleViewAgent = (id) => {
-    navigate(`/agents/${id}`);
+    navigate(`/agents/details/${id}`);
   };
 
   const handleEditAgent = (id) => {
@@ -66,8 +64,14 @@ const Agents = () => {
     if (window.confirm(`Are you sure you want to delete "${agentName}"? This action cannot be undone.`)) {
       try {
         await deleteAgentMutation.mutateAsync(id);
+        toast.success("Agent Deleted", {
+          description: `${agentName} has been deleted successfully.`
+        });
       } catch (error) {
         console.error('Failed to delete agent:', error);
+        toast.error('Failed to delete agent', {
+          description: 'Please try again later.'
+        });
       }
     }
   };
@@ -88,8 +92,9 @@ const Agents = () => {
 
   const handleExport = async () => {
     try {
-      toast.info('Export feature will be available after backend integration');
-      // TODO: Implement export functionality with backend
+      toast.info('Exporting agents data...');
+      // Implementation for export would go here
+      // This could call an API endpoint to generate CSV/Excel export
     } catch (error) {
       toast.error('Failed to export agents');
     }

@@ -1,28 +1,25 @@
 
 const Agent = require('../models/Agent');
-const { AppError } = require('../utils/errorHandler');
-const { 
-  successResponse, 
-  paginatedResponse, 
-  createdResponse, 
-  updatedResponse, 
-  deletedResponse 
-} = require('../utils/responseHandler');
-const mongoose = require('mongoose');
+const User = require('../models/User');
+const { validationResult } = require('express-validator');
+const { generateAgentId } = require('../utils/idGenerator');
+const { calculatePerformanceMetrics } = require('../utils/performanceCalculator');
+const { sendNotification } = require('../services/notificationService');
+const { uploadFile, deleteFile } = require('../services/fileService');
 
 /**
  * Get all agents with filtering, pagination, and search
  */
-const getAllAgents = async (req, res, next) => {
+exports.getAllAgents = async (req, res) => {
   try {
     const {
       page = 1,
       limit = 10,
-      search,
-      status,
-      specialization,
-      region,
-      teamId,
+      search = '',
+      status = '',
+      specialization = '',
+      region = '',
+      teamId = '',
       sortField = 'createdAt',
       sortDirection = 'desc',
       hireDate,
@@ -30,926 +27,973 @@ const getAllAgents = async (req, res, next) => {
       maxCommission
     } = req.query;
 
-    // Build query
-    let query = { isDeleted: false };
-
-    // Apply role-based filtering
-    if (req.ownershipFilter) {
-      query = { ...query, ...req.ownershipFilter };
-    }
-
-    // Search functionality
+    // Build filter object
+    const filter = {};
+    
+    // Add search functionality
     if (search) {
-      query.$or = [
+      filter.$or = [
         { name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
         { phone: { $regex: search, $options: 'i' } },
-        { agentId: { $regex: search, $options: 'i' } },
         { licenseNumber: { $regex: search, $options: 'i' } }
       ];
     }
 
-    // Status filter
-    if (status) {
-      query.status = status;
+    // Add status filter
+    if (status && status !== 'all') {
+      filter.status = status;
     }
 
-    // Specialization filter
-    if (specialization) {
-      query.specialization = { $regex: specialization, $options: 'i' };
-    }
-
-    // Region filter
-    if (region) {
-      query.region = { $regex: region, $options: 'i' };
-    }
-
-    // Team filter
-    if (teamId) {
-      query.teamId = teamId;
-    }
-
-    // Hire date filter
+    // Add other filters
+    if (specialization) filter.specialization = specialization;
+    if (region) filter.region = region;
+    if (teamId) filter.teamId = teamId;
+    
+    // Date filters
     if (hireDate) {
-      query.hireDate = { $gte: new Date(hireDate) };
+      filter.hireDate = { $gte: new Date(hireDate) };
     }
 
-    // Commission rate filters
+    // Commission filters
     if (minCommission || maxCommission) {
-      query.commissionRate = {};
-      if (minCommission) query.commissionRate.$gte = Number(minCommission);
-      if (maxCommission) query.commissionRate.$lte = Number(maxCommission);
+      filter.commissionRate = {};
+      if (minCommission) filter.commissionRate.$gte = parseFloat(minCommission);
+      if (maxCommission) filter.commissionRate.$lte = parseFloat(maxCommission);
     }
 
-    // Pagination
-    const pageNumber = Math.max(1, parseInt(page));
-    const pageSize = Math.min(100, Math.max(1, parseInt(limit)));
-    const skip = (pageNumber - 1) * pageSize;
+    // Role-based filtering
+    if (req.user.role === 'manager') {
+      filter.$or = [
+        { managerId: req.user._id },
+        { region: req.user.region }
+      ];
+    } else if (req.user.role === 'agent') {
+      filter._id = req.user._id;
+    }
 
-    // Sorting
-    const sortOptions = {};
-    sortOptions[sortField] = sortDirection === 'asc' ? 1 : -1;
+    // Build sort object
+    const sort = {};
+    sort[sortField] = sortDirection === 'desc' ? -1 : 1;
 
-    // Execute query with population
+    // Execute query with pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
     const [agents, totalItems] = await Promise.all([
-      Agent.find(query)
+      Agent.find(filter)
         .populate('teamId', 'name region')
         .populate('managerId', 'name email')
-        .populate('createdBy', 'name')
-        .select('-documents -notes -bankDetails.accountNumber -bankDetails.routingNumber')
-        .sort(sortOptions)
+        .sort(sort)
         .skip(skip)
-        .limit(pageSize)
+        .limit(parseInt(limit))
         .lean(),
-      Agent.countDocuments(query)
+      Agent.countDocuments(filter)
     ]);
 
     // Calculate pagination info
-    const totalPages = Math.ceil(totalItems / pageSize);
+    const totalPages = Math.ceil(totalItems / parseInt(limit));
+    const currentPage = parseInt(page);
 
-    const pagination = {
-      currentPage: pageNumber,
-      totalPages,
-      totalItems,
-      itemsPerPage: pageSize
-    };
+    res.json({
+      success: true,
+      data: agents,
+      pagination: {
+        currentPage,
+        totalPages,
+        totalItems,
+        itemsPerPage: parseInt(limit),
+        hasNextPage: currentPage < totalPages,
+        hasPrevPage: currentPage > 1
+      },
+      timestamp: new Date().toISOString()
+    });
 
-    return paginatedResponse(res, agents, pagination);
   } catch (error) {
-    next(error);
+    console.error('Error fetching agents:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agents',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
 /**
  * Get agent by ID
  */
-const getAgentById = async (req, res, next) => {
+exports.getAgentById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
-    }
-
-    // Build query with ownership check
-    let query = { _id: id, isDeleted: false };
-    
-    // Apply role-based filtering for agents
-    if (req.user.role === 'agent' && req.user._id.toString() !== id) {
-      throw new AppError('Access denied. You can only view your own profile.', 403);
-    }
-
-    const agent = await Agent.findOne(query)
-      .populate('teamId', 'name region manager')
-      .populate('managerId', 'name email phone')
-      .populate('createdBy', 'name email')
-      .populate('updatedBy', 'name email')
-      .populate('notes.createdBy', 'name email')
+    const agent = await Agent.findById(id)
+      .populate('teamId', 'name region')
+      .populate('managerId', 'name email')
+      .populate('documents.uploadedBy', 'name')
+      .populate('notes.createdBy', 'name')
       .lean();
 
     if (!agent) {
-      throw new AppError('Agent not found', 404);
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    return successResponse(res, { data: agent });
+    // Check permissions
+    if (req.user.role === 'agent' && agent._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    res.json({
+      success: true,
+      data: agent,
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    next(error);
+    console.error('Error fetching agent:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agent',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
 /**
  * Create new agent
  */
-const createAgent = async (req, res, next) => {
+exports.createAgent = async (req, res) => {
   try {
-    const agentData = {
-      ...req.body,
-      createdBy: req.user._id
-    };
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array(),
+        timestamp: new Date().toISOString()
+      });
+    }
 
+    const agentData = req.body;
+    
+    // Generate unique agent ID
+    agentData.agentId = await generateAgentId();
+    
+    // Create agent
     const agent = new Agent(agentData);
     await agent.save();
 
-    // Populate the created agent
+    // Create user account if email is provided
+    if (agentData.email) {
+      const userData = {
+        name: agentData.name,
+        email: agentData.email,
+        role: agentData.role || 'agent',
+        agentId: agent._id,
+        isActive: agentData.status === 'active'
+      };
+      
+      const user = new User(userData);
+      await user.save();
+      
+      // Update agent with user reference
+      agent.userId = user._id;
+      await agent.save();
+    }
+
+    // Send notification
+    await sendNotification({
+      type: 'agent_created',
+      title: 'New Agent Created',
+      message: `Agent ${agent.name} has been created successfully`,
+      recipients: ['super_admin', 'manager']
+    });
+
     const populatedAgent = await Agent.findById(agent._id)
       .populate('teamId', 'name region')
-      .populate('createdBy', 'name email')
-      .lean();
+      .populate('managerId', 'name email');
 
-    return createdResponse(res, populatedAgent, 'Agent created successfully');
+    res.status(201).json({
+      success: true,
+      message: 'Agent created successfully',
+      data: populatedAgent,
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      throw new AppError(`${field} already exists`, 400);
-    }
-    next(error);
+    console.error('Error creating agent:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create agent',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
 /**
  * Update agent
  */
-const updateAgent = async (req, res, next) => {
+exports.updateAgent = async (req, res) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array(),
+        timestamp: new Date().toISOString()
+      });
+    }
+
     const { id } = req.params;
+    const updateData = req.body;
+    
+    // Remove fields that shouldn't be updated directly
+    delete updateData._id;
+    delete updateData.agentId;
+    delete updateData.createdAt;
 
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
-    }
-
-    // Check ownership for agents
-    if (req.user.role === 'agent' && req.user._id.toString() !== id) {
-      throw new AppError('Access denied. You can only update your own profile.', 403);
-    }
-
-    const updateData = {
-      ...req.body,
-      updatedBy: req.user._id
-    };
-
-    const agent = await Agent.findOneAndUpdate(
-      { _id: id, isDeleted: false },
-      updateData,
-      { new: true, runValidators: true }
-    )
-    .populate('teamId', 'name region')
-    .populate('updatedBy', 'name email')
-    .lean();
-
+    const agent = await Agent.findById(id);
     if (!agent) {
-      throw new AppError('Agent not found', 404);
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    return updatedResponse(res, agent, 'Agent updated successfully');
-  } catch (error) {
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      throw new AppError(`${field} already exists`, 400);
+    // Update agent
+    Object.assign(agent, updateData);
+    agent.updatedAt = new Date();
+    await agent.save();
+
+    // Update associated user account
+    if (agent.userId) {
+      await User.findByIdAndUpdate(agent.userId, {
+        name: agent.name,
+        email: agent.email,
+        isActive: agent.status === 'active'
+      });
     }
-    next(error);
+
+    const updatedAgent = await Agent.findById(id)
+      .populate('teamId', 'name region')
+      .populate('managerId', 'name email');
+
+    res.json({
+      success: true,
+      message: 'Agent updated successfully',
+      data: updatedAgent,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error updating agent:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update agent',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
 /**
  * Delete agent (soft delete)
  */
-const deleteAgent = async (req, res, next) => {
+exports.deleteAgent = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
-    }
-
-    const agent = await Agent.findOneAndUpdate(
-      { _id: id, isDeleted: false },
-      {
-        isDeleted: true,
-        deletedAt: new Date(),
-        deletedBy: req.user._id,
-        status: 'terminated'
-      },
-      { new: true }
-    );
-
+    const agent = await Agent.findById(id);
     if (!agent) {
-      throw new AppError('Agent not found', 404);
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    return deletedResponse(res, 'Agent deleted successfully');
+    // Soft delete
+    agent.status = 'terminated';
+    agent.terminationDate = new Date();
+    agent.isDeleted = true;
+    await agent.save();
+
+    // Deactivate user account
+    if (agent.userId) {
+      await User.findByIdAndUpdate(agent.userId, {
+        isActive: false,
+        deletedAt: new Date()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Agent deleted successfully',
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    next(error);
+    console.error('Error deleting agent:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete agent',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
 /**
  * Upload agent document
  */
-const uploadDocument = async (req, res, next) => {
+exports.uploadDocument = async (req, res) => {
   try {
     const { id } = req.params;
     const { documentType, name } = req.body;
+    const file = req.file;
 
-    if (!req.file) {
-      throw new AppError('No file uploaded', 400);
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
+    const agent = await Agent.findById(id);
+    if (!agent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
+    // Upload file
+    const fileUrl = await uploadFile(file, 'agents');
+
+    // Add document to agent
     const document = {
-      name: name || req.file.originalname,
+      name: name || file.originalname,
       type: documentType,
-      url: `/uploads/agents/${req.file.filename}`,
-      size: req.file.size,
-      mimeType: req.file.mimetype,
-      uploadedBy: req.user._id
+      url: fileUrl,
+      size: file.size,
+      mimeType: file.mimetype,
+      uploadedBy: req.user._id,
+      uploadedAt: new Date()
     };
 
-    const agent = await Agent.findOneAndUpdate(
-      { _id: id, isDeleted: false },
-      { $push: { documents: document } },
-      { new: true }
-    );
+    agent.documents.push(document);
+    await agent.save();
 
-    if (!agent) {
-      throw new AppError('Agent not found', 404);
-    }
+    res.status(201).json({
+      success: true,
+      message: 'Document uploaded successfully',
+      data: document,
+      timestamp: new Date().toISOString()
+    });
 
-    const uploadedDocument = agent.documents[agent.documents.length - 1];
-
-    return createdResponse(res, uploadedDocument, 'Document uploaded successfully');
   } catch (error) {
-    next(error);
+    console.error('Error uploading document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload document',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
 /**
  * Get agent documents
  */
-const getAgentDocuments = async (req, res, next) => {
+exports.getAgentDocuments = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
-    }
-
-    const agent = await Agent.findOne(
-      { _id: id, isDeleted: false },
-      { documents: 1 }
-    )
-    .populate('documents.uploadedBy', 'name email')
-    .lean();
+    const agent = await Agent.findById(id)
+      .select('documents')
+      .populate('documents.uploadedBy', 'name');
 
     if (!agent) {
-      throw new AppError('Agent not found', 404);
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    return successResponse(res, { data: agent.documents });
+    res.json({
+      success: true,
+      data: agent.documents,
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    next(error);
+    console.error('Error fetching agent documents:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agent documents',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
 /**
  * Delete agent document
  */
-const deleteDocument = async (req, res, next) => {
+exports.deleteDocument = async (req, res) => {
   try {
     const { id, documentId } = req.params;
 
-    if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(documentId)) {
-      throw new AppError('Invalid ID provided', 400);
-    }
-
-    const agent = await Agent.findOneAndUpdate(
-      { _id: id, isDeleted: false },
-      { $pull: { documents: { _id: documentId } } },
-      { new: true }
-    );
-
+    const agent = await Agent.findById(id);
     if (!agent) {
-      throw new AppError('Agent not found', 404);
-    }
-
-    return deletedResponse(res, 'Document deleted successfully');
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Get clients assigned to agent
- */
-const getAgentClients = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { page = 1, limit = 10, status } = req.query;
-
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
-    }
-
-    // Import Client model (assuming it exists)
-    const Client = require('../models/Client');
-
-    let query = { assignedAgentId: id, isDeleted: false };
-    
-    if (status) {
-      query.status = status;
-    }
-
-    const pageNumber = Math.max(1, parseInt(page));
-    const pageSize = Math.min(100, Math.max(1, parseInt(limit)));
-    const skip = (pageNumber - 1) * pageSize;
-
-    const [clients, totalItems] = await Promise.all([
-      Client.find(query)
-        .select('name email phone status totalPolicies totalPremium createdAt')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(pageSize)
-        .lean(),
-      Client.countDocuments(query)
-    ]);
-
-    const pagination = {
-      currentPage: pageNumber,
-      totalPages: Math.ceil(totalItems / pageSize),
-      totalItems,
-      itemsPerPage: pageSize
-    };
-
-    return paginatedResponse(res, clients, pagination);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Get policies assigned to agent
- */
-const getAgentPolicies = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { page = 1, limit = 10, status } = req.query;
-
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
-    }
-
-    // Import Policy model (assuming it exists)
-    const Policy = require('../models/Policy');
-
-    let query = { assignedAgentId: id, isDeleted: false };
-    
-    if (status) {
-      query.status = status;
-    }
-
-    const pageNumber = Math.max(1, parseInt(page));
-    const pageSize = Math.min(100, Math.max(1, parseInt(limit)));
-    const skip = (pageNumber - 1) * pageSize;
-
-    const [policies, totalItems] = await Promise.all([
-      Policy.find(query)
-        .populate('clientId', 'name email')
-        .select('policyNumber type status premium coverage startDate endDate')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(pageSize)
-        .lean(),
-      Policy.countDocuments(query)
-    ]);
-
-    const pagination = {
-      currentPage: pageNumber,
-      totalPages: Math.ceil(totalItems / pageSize),
-      totalItems,
-      itemsPerPage: pageSize
-    };
-
-    return paginatedResponse(res, policies, pagination);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Get agent commission details
- */
-const getAgentCommissions = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { startDate, endDate, status } = req.query;
-
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
-    }
-
-    // Import Policy model for commission calculation
-    const Policy = require('../models/Policy');
-
-    let dateFilter = {};
-    if (startDate || endDate) {
-      dateFilter.createdAt = {};
-      if (startDate) dateFilter.createdAt.$gte = new Date(startDate);
-      if (endDate) dateFilter.createdAt.$lte = new Date(endDate);
-    }
-
-    let commissionFilter = { assignedAgentId: id, isDeleted: false };
-    if (status) {
-      commissionFilter['commission.paid'] = status === 'paid';
-    }
-
-    const policies = await Policy.find({ ...commissionFilter, ...dateFilter })
-      .populate('clientId', 'name')
-      .select('policyNumber premium commission createdAt')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const totalCommissions = policies.reduce((sum, policy) => 
-      sum + (policy.commission?.amount || 0), 0
-    );
-    
-    const paidCommissions = policies
-      .filter(policy => policy.commission?.paid)
-      .reduce((sum, policy) => sum + (policy.commission?.amount || 0), 0);
-    
-    const pendingCommissions = totalCommissions - paidCommissions;
-
-    const commissionData = {
-      totalCommissions,
-      paidCommissions,
-      pendingCommissions,
-      commissionHistory: policies.map(policy => ({
-        _id: policy._id,
-        policyId: policy._id,
-        policyNumber: policy.policyNumber,
-        clientName: policy.clientId?.name,
-        amount: policy.commission?.amount || 0,
-        rate: policy.commission?.rate || 0,
-        status: policy.commission?.paid ? 'paid' : 'pending',
-        paidDate: policy.commission?.paidDate,
-        createdAt: policy.createdAt
-      }))
-    };
-
-    return successResponse(res, { data: commissionData });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Get agent performance data
- */
-const getAgentPerformance = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { period = 'year', year = new Date().getFullYear() } = req.query;
-
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
-    }
-
-    const agent = await Agent.findOne(
-      { _id: id, isDeleted: false },
-      { performance: 1, name: 1 }
-    ).lean();
-
-    if (!agent) {
-      throw new AppError('Agent not found', 404);
-    }
-
-    // Get detailed performance data from policies and clients
-    const Policy = require('../models/Policy');
-    const Client = require('../models/Client');
-
-    const startOfYear = new Date(year, 0, 1);
-    const endOfYear = new Date(year, 11, 31, 23, 59, 59);
-
-    const [policies, clients] = await Promise.all([
-      Policy.find({
-        assignedAgentId: id,
-        createdAt: { $gte: startOfYear, $lte: endOfYear },
-        isDeleted: false
-      }).lean(),
-      Client.find({
-        assignedAgentId: id,
-        createdAt: { $gte: startOfYear, $lte: endOfYear },
-        isDeleted: false
-      }).lean()
-    ]);
-
-    // Calculate monthly data
-    const monthlyData = [];
-    for (let month = 0; month < 12; month++) {
-      const monthStart = new Date(year, month, 1);
-      const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
-
-      const monthPolicies = policies.filter(p => 
-        p.createdAt >= monthStart && p.createdAt <= monthEnd
-      );
-      const monthClients = clients.filter(c => 
-        c.createdAt >= monthStart && c.createdAt <= monthEnd
-      );
-
-      monthlyData.push({
-        month: `${year}-${String(month + 1).padStart(2, '0')}`,
-        newClients: monthClients.length,
-        newPolicies: monthPolicies.length,
-        premium: monthPolicies.reduce((sum, p) => sum + (p.premium?.amount || 0), 0),
-        commission: monthPolicies.reduce((sum, p) => sum + (p.commission?.amount || 0), 0)
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
       });
     }
 
-    const performanceData = {
-      overview: agent.performance,
-      monthlyData,
-      targets: {
-        monthly: agent.performance.monthlyTargets,
-        quarterly: agent.performance.quarterlyTargets,
-        annual: agent.performance.annualTargets
+    const document = agent.documents.id(documentId);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Delete file from storage
+    await deleteFile(document.url);
+
+    // Remove document from agent
+    agent.documents.pull(documentId);
+    await agent.save();
+
+    res.json({
+      success: true,
+      message: 'Document deleted successfully',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete document',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+/**
+ * Get agent clients
+ */
+exports.getAgentClients = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 10, status = '' } = req.query;
+
+    const Client = require('../models/Client');
+    
+    const filter = { agentId: id };
+    if (status) filter.status = status;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const [clients, totalItems] = await Promise.all([
+      Client.find(filter)
+        .select('name email phone status totalPolicies totalPremium')
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Client.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: clients,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalItems / parseInt(limit)),
+        totalItems,
+        itemsPerPage: parseInt(limit)
       },
-      achievements: agent.performance.achievements || []
-    };
+      timestamp: new Date().toISOString()
+    });
 
-    return successResponse(res, { data: performanceData });
   } catch (error) {
-    next(error);
+    console.error('Error fetching agent clients:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agent clients',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
 /**
- * Update agent performance targets
+ * Get agent policies
  */
-const updatePerformanceTargets = async (req, res, next) => {
+exports.getAgentPolicies = async (req, res) => {
   try {
     const { id } = req.params;
-    const { monthly, quarterly, annual } = req.body;
+    const { page = 1, limit = 10, status = '' } = req.query;
 
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
+    const Policy = require('../models/Policy');
+    
+    const filter = { agentId: id };
+    if (status) filter.status = status;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const [policies, totalItems] = await Promise.all([
+      Policy.find(filter)
+        .populate('clientId', 'name email')
+        .select('policyNumber type status premium startDate endDate')
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Policy.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: policies,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalItems / parseInt(limit)),
+        totalItems,
+        itemsPerPage: parseInt(limit)
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error fetching agent policies:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agent policies',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+/**
+ * Get agent commissions
+ */
+exports.getAgentCommissions = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { startDate, endDate, status = '' } = req.query;
+
+    const Commission = require('../models/Commission');
+    
+    const filter = { agentId: id };
+    
+    if (status) filter.status = status;
+    
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
     }
 
-    const updateData = {};
-    if (monthly) updateData['performance.monthlyTargets'] = monthly;
-    if (quarterly) updateData['performance.quarterlyTargets'] = quarterly;
-    if (annual) updateData['performance.annualTargets'] = annual;
+    const commissions = await Commission.find(filter)
+      .populate('policyId', 'policyNumber type premium')
+      .sort({ createdAt: -1 })
+      .lean();
 
-    updateData.updatedBy = req.user._id;
+    // Calculate totals
+    const totalCommissions = commissions.reduce((sum, comm) => sum + comm.amount, 0);
+    const paidCommissions = commissions
+      .filter(comm => comm.status === 'paid')
+      .reduce((sum, comm) => sum + comm.amount, 0);
+    const pendingCommissions = commissions
+      .filter(comm => comm.status === 'pending')
+      .reduce((sum, comm) => sum + comm.amount, 0);
 
-    const agent = await Agent.findOneAndUpdate(
-      { _id: id, isDeleted: false },
-      updateData,
-      { new: true }
-    ).lean();
+    res.json({
+      success: true,
+      data: {
+        totalCommissions,
+        paidCommissions,
+        pendingCommissions,
+        commissionHistory: commissions
+      },
+      timestamp: new Date().toISOString()
+    });
 
+  } catch (error) {
+    console.error('Error fetching agent commissions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agent commissions',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+/**
+ * Get agent performance
+ */
+exports.getAgentPerformance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { period = 'month', year = new Date().getFullYear() } = req.query;
+
+    const agent = await Agent.findById(id);
     if (!agent) {
-      throw new AppError('Agent not found', 404);
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    return updatedResponse(res, agent.performance, 'Performance targets updated successfully');
+    // Calculate performance metrics
+    const performance = await calculatePerformanceMetrics(id, period, year);
+
+    res.json({
+      success: true,
+      data: performance,
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    next(error);
+    console.error('Error fetching agent performance:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agent performance',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Add note to agent
- */
-const addNote = async (req, res, next) => {
+// Additional controller methods for remaining endpoints...
+exports.updatePerformanceTargets = async (req, res) => {
+  // Implementation for updating performance targets
   try {
     const { id } = req.params;
-    const { content, isPrivate = false, tags = [], priority = 'medium' } = req.body;
+    const targetsData = req.body;
 
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
+    const agent = await Agent.findById(id);
+    if (!agent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    agent.performanceTargets = targetsData;
+    await agent.save();
+
+    res.json({
+      success: true,
+      message: 'Performance targets updated successfully',
+      data: agent.performanceTargets,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error updating performance targets:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update performance targets',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+exports.addNote = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, isPrivate = false, tags = [] } = req.body;
+
+    const agent = await Agent.findById(id);
+    if (!agent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
     const note = {
       content,
       createdBy: req.user._id,
+      createdAt: new Date(),
       isPrivate,
-      tags,
-      priority
+      tags
     };
 
-    const agent = await Agent.findOneAndUpdate(
-      { _id: id, isDeleted: false },
-      { $push: { notes: note } },
-      { new: true }
-    );
+    agent.notes.push(note);
+    await agent.save();
 
-    if (!agent) {
-      throw new AppError('Agent not found', 404);
-    }
+    res.status(201).json({
+      success: true,
+      message: 'Note added successfully',
+      data: note,
+      timestamp: new Date().toISOString()
+    });
 
-    const addedNote = agent.notes[agent.notes.length - 1];
-
-    return createdResponse(res, addedNote, 'Note added successfully');
   } catch (error) {
-    next(error);
+    console.error('Error adding note:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add note',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Get agent notes
- */
-const getAgentNotes = async (req, res, next) => {
+exports.getAgentNotes = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.isValidObjectId(id)) {
-      throw new AppError('Invalid agent ID', 400);
-    }
-
-    const agent = await Agent.findOne(
-      { _id: id, isDeleted: false },
-      { notes: 1 }
-    )
-    .populate('notes.createdBy', 'name email')
-    .lean();
+    const agent = await Agent.findById(id)
+      .select('notes')
+      .populate('notes.createdBy', 'name');
 
     if (!agent) {
-      throw new AppError('Agent not found', 404);
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    // Filter private notes for non-admin users
-    let notes = agent.notes;
-    if (req.user.role === 'agent' && req.user._id.toString() !== id) {
-      notes = notes.filter(note => !note.isPrivate);
-    }
+    res.json({
+      success: true,
+      data: agent.notes,
+      timestamp: new Date().toISOString()
+    });
 
-    return successResponse(res, { data: notes });
   } catch (error) {
-    next(error);
+    console.error('Error fetching agent notes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agent notes',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Search agents
- */
-const searchAgents = async (req, res, next) => {
+exports.searchAgents = async (req, res) => {
   try {
     const { query } = req.params;
     const { limit = 10 } = req.query;
 
-    const searchResults = await Agent.find({
-      $and: [
-        { isDeleted: false },
-        {
-          $or: [
-            { name: { $regex: query, $options: 'i' } },
-            { email: { $regex: query, $options: 'i' } },
-            { phone: { $regex: query, $options: 'i' } },
-            { agentId: { $regex: query, $options: 'i' } },
-            { specialization: { $regex: query, $options: 'i' } }
-          ]
-        }
-      ]
+    const agents = await Agent.find({
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } },
+        { licenseNumber: { $regex: query, $options: 'i' } }
+      ],
+      status: 'active'
     })
-    .select('name email phone agentId specialization status performance.totalPremium')
+    .select('name email phone specialization region')
     .limit(parseInt(limit))
     .lean();
 
-    return successResponse(res, { data: searchResults });
+    res.json({
+      success: true,
+      data: agents,
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    next(error);
+    console.error('Error searching agents:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search agents',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Get agent statistics
- */
-const getAgentStats = async (req, res, next) => {
+exports.getAgentStats = async (req, res) => {
   try {
-    const [
-      totalAgents,
-      activeAgents,
-      inactiveAgents,
-      onboardingAgents,
-      avgCommissionRate,
-      topPerformers,
-      specializationStats,
-      regionStats
-    ] = await Promise.all([
-      Agent.countDocuments({ isDeleted: false }),
-      Agent.countDocuments({ status: 'active', isDeleted: false }),
-      Agent.countDocuments({ status: 'inactive', isDeleted: false }),
-      Agent.countDocuments({ status: 'onboarding', isDeleted: false }),
-      Agent.aggregate([
-        { $match: { isDeleted: false } },
-        { $group: { _id: null, avgRate: { $avg: '$commissionRate' } } }
-      ]),
-      Agent.find({ isDeleted: false })
-        .select('name performance.totalPremium performance.conversionRate')
-        .sort({ 'performance.totalPremium': -1 })
-        .limit(5)
-        .lean(),
-      Agent.aggregate([
-        { $match: { isDeleted: false } },
-        { $group: { _id: '$specialization', count: { $sum: 1 } } },
-        { $sort: { count: -1 } }
-      ]),
-      Agent.aggregate([
-        { $match: { isDeleted: false } },
-        { $group: { _id: '$region', count: { $sum: 1 } } },
-        { $sort: { count: -1 } }
-      ])
+    const totalAgents = await Agent.countDocuments();
+    const activeAgents = await Agent.countDocuments({ status: 'active' });
+    const inactiveAgents = await Agent.countDocuments({ status: 'inactive' });
+    const onboardingAgents = await Agent.countDocuments({ status: 'onboarding' });
+
+    const avgCommissionRate = await Agent.aggregate([
+      { $group: { _id: null, avgRate: { $avg: '$commissionRate' } } }
     ]);
 
-    const stats = {
-      totalAgents,
-      activeAgents,
-      inactiveAgents,
-      onboardingAgents,
-      avgCommissionRate: avgCommissionRate[0]?.avgRate || 0,
-      topPerformers,
-      bySpecialization: specializationStats.reduce((acc, item) => {
-        acc[item._id] = item.count;
-        return acc;
-      }, {}),
-      byRegion: regionStats.reduce((acc, item) => {
-        acc[item._id] = item.count;
-        return acc;
-      }, {})
-    };
+    const specializationStats = await Agent.aggregate([
+      { $group: { _id: '$specialization', count: { $sum: 1 } } }
+    ]);
 
-    return successResponse(res, { data: stats });
+    const regionStats = await Agent.aggregate([
+      { $group: { _id: '$region', count: { $sum: 1 } } }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalAgents,
+        activeAgents,
+        inactiveAgents,
+        onboardingAgents,
+        avgCommissionRate: avgCommissionRate[0]?.avgRate || 0,
+        bySpecialization: specializationStats.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
+        byRegion: regionStats.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {})
+      },
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    next(error);
+    console.error('Error fetching agent stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agent statistics',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Get performance rankings
- */
-const getPerformanceRankings = async (req, res, next) => {
+exports.getPerformanceRankings = async (req, res) => {
   try {
     const { period = 'month', metric = 'totalPremium' } = req.query;
 
-    const agents = await Agent.find({ 
-      status: 'active', 
-      isDeleted: false 
-    })
-    .select('name performance specialization region')
-    .sort({ [`performance.${metric}`]: -1 })
-    .limit(20)
-    .lean();
+    // Implementation for performance rankings
+    const agents = await Agent.find({ status: 'active' })
+      .select('name totalPremium conversionRate')
+      .sort({ [metric]: -1 })
+      .limit(10)
+      .lean();
 
-    return successResponse(res, { data: agents });
+    res.json({
+      success: true,
+      data: agents,
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    next(error);
+    console.error('Error fetching performance rankings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch performance rankings',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Get agents with expiring licenses
- */
-const getExpiringLicenses = async (req, res, next) => {
+exports.getExpiringLicenses = async (req, res) => {
   try {
     const { days = 30 } = req.query;
-
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + parseInt(days));
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + parseInt(days));
 
     const agents = await Agent.find({
-      licenseExpiry: { $lte: futureDate },
-      status: { $ne: 'terminated' },
-      isDeleted: false
+      licenseExpiry: { $lte: expiryDate },
+      status: 'active'
     })
-    .select('name email phone licenseNumber licenseExpiry')
+    .select('name email licenseNumber licenseExpiry')
     .sort({ licenseExpiry: 1 })
     .lean();
 
-    return successResponse(res, { data: agents });
+    res.json({
+      success: true,
+      data: agents,
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    next(error);
+    console.error('Error fetching expiring licenses:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch expiring licenses',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Bulk update agents
- */
-const bulkUpdateAgents = async (req, res, next) => {
+exports.bulkUpdateAgents = async (req, res) => {
   try {
     const { agentIds, updateData } = req.body;
 
-    if (!Array.isArray(agentIds) || agentIds.length === 0) {
-      throw new AppError('Agent IDs array is required', 400);
-    }
-
     const result = await Agent.updateMany(
-      { 
-        _id: { $in: agentIds },
-        isDeleted: false
-      },
-      { 
-        ...updateData,
-        updatedBy: req.user._id
-      }
+      { _id: { $in: agentIds } },
+      { $set: updateData }
     );
 
-    return updatedResponse(res, result, `${result.modifiedCount} agents updated successfully`);
+    res.json({
+      success: true,
+      message: 'Agents updated successfully',
+      data: { modifiedCount: result.modifiedCount },
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
-    next(error);
+    console.error('Error bulk updating agents:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to bulk update agents',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
-/**
- * Export agents data
- */
-const exportAgents = async (req, res, next) => {
+exports.exportAgents = async (req, res) => {
   try {
-    const { format = 'json', ...filters } = req.query;
-
-    // Build query from filters
-    let query = { isDeleted: false };
-    
-    if (filters.status) query.status = filters.status;
-    if (filters.specialization) query.specialization = filters.specialization;
-    if (filters.region) query.region = filters.region;
-
-    const agents = await Agent.find(query)
+    const agents = await Agent.find({})
       .populate('teamId', 'name')
-      .select('-documents -notes -bankDetails.accountNumber -bankDetails.routingNumber')
+      .populate('managerId', 'name')
       .lean();
 
-    // Format data for export
-    const exportData = agents.map(agent => ({
-      agentId: agent.agentId,
-      name: agent.name,
-      email: agent.email,
-      phone: agent.phone,
-      status: agent.status,
-      specialization: agent.specialization,
-      region: agent.region,
-      team: agent.teamId?.name,
-      licenseNumber: agent.licenseNumber,
-      licenseExpiry: agent.licenseExpiry,
-      hireDate: agent.hireDate,
-      commissionRate: agent.commissionRate,
-      clientsCount: agent.performance?.clientsCount || 0,
-      policiesCount: agent.performance?.policiesCount || 0,
-      totalPremium: agent.performance?.totalPremium || 0,
-      createdAt: agent.createdAt
-    }));
-
-    return successResponse(res, { 
-      data: exportData,
-      format,
-      exportedAt: new Date(),
-      totalRecords: exportData.length
+    res.json({
+      success: true,
+      data: {
+        totalRecords: agents.length,
+        agents
+      },
+      timestamp: new Date().toISOString()
     });
-  } catch (error) {
-    next(error);
-  }
-};
 
-module.exports = {
-  getAllAgents,
-  getAgentById,
-  createAgent,
-  updateAgent,
-  deleteAgent,
-  uploadDocument,
-  getAgentDocuments,
-  deleteDocument,
-  getAgentClients,
-  getAgentPolicies,
-  getAgentCommissions,
-  getAgentPerformance,
-  updatePerformanceTargets,
-  addNote,
-  getAgentNotes,
-  searchAgents,
-  getAgentStats,
-  getPerformanceRankings,
-  getExpiringLicenses,
-  bulkUpdateAgents,
-  exportAgents
+  } catch (error) {
+    console.error('Error exporting agents:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export agents',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 };
