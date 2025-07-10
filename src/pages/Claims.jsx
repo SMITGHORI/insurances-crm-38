@@ -1,22 +1,21 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, Download } from 'lucide-react';
+import { Plus, Download, FileUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ClaimsTable from '@/components/claims/ClaimsTable';
 import { useIsMobile } from '@/hooks/use-mobile';
 import ClaimFilters from '@/components/claims/ClaimFilters';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
 import ClaimStatsCards from '@/components/claims/ClaimStatsCards';
 import BulkOperationsToolbar from '@/components/claims/BulkOperationsToolbar';
-import ClaimExportDialog from '@/components/claims/ClaimExportDialog';
 import ClaimsReports from '@/components/claims/ClaimsReports';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { BarChart } from 'lucide-react';
 import Protected from '@/components/Protected';
 import { useClaims, useExportClaims } from '../hooks/useClaims';
+import ClaimCreateForm from '@/components/claims/ClaimCreateForm';
 
 const Claims = () => {
   const navigate = useNavigate();
@@ -33,6 +32,7 @@ const Claims = () => {
   const [activeFilters, setActiveFilters] = useState([]);
   const [selectedClaims, setSelectedClaims] = useState([]);
   const [showReports, setShowReports] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Connect to MongoDB for claims data
   const { data: claimsResponse, isLoading, error } = useClaims({
@@ -49,7 +49,18 @@ const Claims = () => {
   const pagination = claimsResponse?.pagination || {};
 
   const handleCreateClaim = () => {
-    navigate('/claims/create');
+    setShowCreateForm(true);
+  };
+
+  const handleCreateSuccess = (claim) => {
+    setShowCreateForm(false);
+    toast.success('Claim created successfully!');
+    // Navigate to the created claim detail page
+    navigate(`/claims/${claim._id}`);
+  };
+
+  const handleCreateCancel = () => {
+    setShowCreateForm(false);
   };
 
   const handleExport = async () => {
@@ -57,12 +68,50 @@ const Claims = () => {
       console.log('Exporting claims from MongoDB with filters:', filterParams);
       
       // Use the MongoDB export API
-      await exportClaimsMutation.mutateAsync(filterParams);
+      const result = await exportClaimsMutation.mutateAsync(filterParams);
+      
+      // Create and download CSV
+      if (result.data && result.data.length > 0) {
+        const csv = convertToCSV(result.data);
+        downloadCSV(csv, 'claims-export.csv');
+        toast.success(`Exported ${result.data.length} claims successfully`);
+      } else {
+        toast.info('No claims found to export');
+      }
       
       console.log('Claims exported successfully from MongoDB');
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Failed to export claims data from database');
+    }
+  };
+
+  const convertToCSV = (data) => {
+    if (!data.length) return '';
+    
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(row => 
+      Object.values(row).map(value => 
+        typeof value === 'string' && value.includes(',') 
+          ? `"${value}"` 
+          : value
+      ).join(',')
+    );
+    
+    return [headers, ...rows].join('\n');
+  };
+
+  const downloadCSV = (csv, filename) => {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -129,6 +178,23 @@ const Claims = () => {
           <p className="text-gray-600 mb-4">Unable to connect to the database. Please try again later.</p>
           <Button onClick={() => window.location.reload()}>Retry</Button>
         </div>
+      </div>
+    );
+  }
+
+  if (showCreateForm) {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Create New Claim</h1>
+          <p className="text-sm text-gray-600 mt-1">
+            Connected to MongoDB • Real-time database operations
+          </p>
+        </div>
+        <ClaimCreateForm 
+          onCancel={handleCreateCancel}
+          onSuccess={handleCreateSuccess}
+        />
       </div>
     );
   }
