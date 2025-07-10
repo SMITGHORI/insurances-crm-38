@@ -11,22 +11,26 @@ import {
   TrendingUp,
   Database,
   Wifi,
-  RefreshCw
+  RefreshCw,
+  Settings,
+  Download
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Button } from '@/components/ui/button';
 import ActivityFilters from '@/components/activities/ActivityFilters';
 import ActivityTabs from '@/components/activities/ActivityTabs';
 import ActivitiesMobileView from '@/components/activities/ActivitiesMobileView';
 import ActivitiesDesktopView from '@/components/activities/ActivitiesDesktopView';
+import ActivityManager from '@/components/activities/ActivityManager';
+import { useActivities, useRealtimeActivities } from '@/hooks/useRecentActivities';
+import { useActivityWebSocket } from '@/hooks/useActivityWebSocket';
+import AdvancedActivityFilters from '@/components/activities/AdvancedActivityFilters';
+import ActivityAnalytics from '@/components/activities/ActivityAnalytics';
+import { PageSkeleton } from '@/components/ui/professional-skeleton';
 import { useOptimizedQuery } from '@/hooks/useOptimizedQuery';
 import { usePerformanceMonitor } from '@/hooks/usePerformanceMonitor';
 import { useDebouncedValue } from '@/hooks/useDebouncedSearch';
-import { PageSkeleton } from '@/components/ui/professional-skeleton';
-import { useActivities, useRealtimeActivities } from '@/hooks/useRecentActivities';
-import AdvancedActivityFilters from '@/components/activities/AdvancedActivityFilters';
-import ActivityAnalytics from '@/components/activities/ActivityAnalytics';
-import { Button } from '@/components/ui/button';
 
 const RecentActivities = () => {
   const navigate = useNavigate();
@@ -36,6 +40,8 @@ const RecentActivities = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [agentFilter, setAgentFilter] = useState('all');
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showManager, setShowManager] = useState(false);
+  const [selectedActivityIds, setSelectedActivityIds] = useState([]);
   const isMobile = useIsMobile();
 
   // Performance monitoring
@@ -59,6 +65,24 @@ const RecentActivities = () => {
 
   // Set up real-time updates
   const { refreshActivities } = useRealtimeActivities();
+
+  // WebSocket connection for real-time updates
+  const handleActivityUpdate = useCallback((data, updateType) => {
+    switch (updateType) {
+      case 'new':
+      case 'updated':
+        refreshActivities();
+        break;
+      case 'initial':
+        // Handle initial activity load if needed
+        break;
+      case 'stats':
+        // Handle stats update if needed
+        break;
+    }
+  }, [refreshActivities]);
+
+  const { isConnected: wsConnected, requestRefresh } = useActivityWebSocket(handleActivityUpdate);
 
   // Memoized activities data from MongoDB
   const activities = useMemo(() => activitiesData?.activities || [], [activitiesData]);
@@ -129,6 +153,7 @@ const RecentActivities = () => {
     setDateFilter('all');
     setTypeFilter('all');
     setAgentFilter('all');
+    setSelectedActivityIds([]);
     toast.success('Filters have been reset');
   }, []);
 
@@ -137,12 +162,47 @@ const RecentActivities = () => {
       console.log('Manual refresh of activities from MongoDB');
       toast.loading('Refreshing activities from MongoDB...');
       await refetch();
+      if (wsConnected) {
+        requestRefresh();
+      }
       toast.success('Activities refreshed successfully');
     } catch (error) {
       console.error('Failed to refresh activities:', error);
       toast.error('Failed to refresh activities');
     }
-  }, [refetch]);
+  }, [refetch, wsConnected, requestRefresh]);
+
+  const handleExportActivities = useCallback(() => {
+    try {
+      const csvContent = [
+        ['ID', 'Description', 'Type', 'Operation', 'User', 'Entity', 'Date'].join(','),
+        ...filteredActivities.map(activity => [
+          activity.activityId,
+          `"${activity.description.replace(/"/g, '""')}"`,
+          activity.type,
+          activity.operation,
+          activity.userName,
+          activity.entityName,
+          new Date(activity.createdAt).toISOString()
+        ].join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `activities-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success('Activities exported successfully');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export activities');
+    }
+  }, [filteredActivities]);
 
   const getActivityIcon = useCallback((type) => {
     switch (type) {
@@ -221,7 +281,7 @@ const RecentActivities = () => {
             </div>
             <div className="flex items-center gap-1 text-blue-600">
               <Database className="h-4 w-4" />
-              <span className="text-sm">Real-time sync enabled</span>
+              <span className="text-sm">Real-time sync {wsConnected ? 'enabled' : 'disabled'}</span>
             </div>
           </div>
         </div>
@@ -233,6 +293,18 @@ const RecentActivities = () => {
           >
             <TrendingUp className="mr-2 h-4 w-4" />
             {showAnalytics ? 'Hide Analytics' : 'Show Analytics'}
+          </Button>
+          <Button
+            variant={showManager ? "default" : "outline"}
+            onClick={() => setShowManager(!showManager)}
+            size="sm"
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            {showManager ? 'Hide Manager' : 'Show Manager'}
+          </Button>
+          <Button onClick={handleExportActivities} variant="outline" size="sm">
+            <Download className="mr-2 h-4 w-4" />
+            Export
           </Button>
           <Button onClick={handleRefresh} variant="outline" size="sm" disabled={isLoading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -246,9 +318,16 @@ const RecentActivities = () => {
         </div>
       </div>
 
-      {/* Show Analytics or Activities */}
+      {/* Show Analytics, Manager, or Activities */}
       {showAnalytics ? (
         <ActivityAnalytics activities={filteredActivities} />
+      ) : showManager ? (
+        <ActivityManager 
+          activities={filteredActivities}
+          onUpdate={handleRefresh}
+          selectedIds={selectedActivityIds}
+          onSelectionChange={setSelectedActivityIds}
+        />
       ) : (
         <>
           <AdvancedActivityFilters 
@@ -285,7 +364,8 @@ const RecentActivities = () => {
       {/* Real-time Data Footer */}
       <div className="text-center text-sm text-gray-500 py-4 border-t mt-6">
         Connected to MongoDB • {filteredActivities.length} activities • 
-        Real-time sync enabled • Last updated: {new Date().toLocaleTimeString()}
+        Real-time sync {wsConnected ? 'enabled' : 'disabled'} • 
+        Last updated: {new Date().toLocaleTimeString()}
       </div>
     </div>
   );

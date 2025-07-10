@@ -1,102 +1,128 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const { globalErrorHandler } = require('./utils/errorHandler');
+const morgan = require('morgan');
+const mongoose = require('mongoose');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const passport = require('passport');
+const compression = require('compression');
+const { v4: uuidv4 } = require('uuid');
+const path = require('path');
+
+// Load environment variables
+require('dotenv').config();
 
 // Import routes
 const authRoutes = require('./routes/auth');
-const clientRoutes = require('./routes/clients');
-const quotationRoutes = require('./routes/quotations'); 
-const invoiceRoutes = require('./routes/invoices');
-const communicationRoutes = require('./routes/communication');
-const broadcastRoutes = require('./routes/broadcast');
-const enhancedBroadcastRoutes = require('./routes/enhancedBroadcast');
-const userRoutes = require('./routes/users');
 const dashboardRoutes = require('./routes/dashboard');
+const activitiesRoutes = require('./routes/activities');
 
+// Import middleware
+const errorHandler = require('./middleware/errorHandler');
+const rateLimiter = require('./middleware/rateLimiter');
+
+const activityWebSocket = require('./services/activityWebSocket');
+const activityLogger = require('./middleware/activityLogger');
+
+// Initialize Express app
 const app = express();
+const PORT = process.env.PORT || 5000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/insuranceDB';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
 
-// Security middleware
-app.use(helmet());
-
-// CORS configuration
+// CORS Configuration
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: '*',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 204,
 };
+
+// Connect to MongoDB
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log('Connected to MongoDB'))
+.catch(err => console.error('MongoDB connection error:', err));
+
+// Session store
+const sessionStore = new MongoStore({
+  mongoUrl: MONGODB_URI,
+  collectionName: 'sessions'
+});
+
+// Express session middleware
+app.use(session({
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  store: sessionStore,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
+  }
+}));
+
+// Passport middleware
+require('./config/passport')(passport);
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Middleware setup
 app.use(cors(corsOptions));
+app.use(helmet());
+app.use(morgan('dev'));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(rateLimiter);
+app.use(compression());
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again later.'
-  }
+// Generate request ID
+app.use((req, res, next) => {
+  req.id = uuidv4();
+  res.setHeader('X-Request-ID', req.id);
+  next();
 });
-app.use('/api/', limiter);
 
-// Body parser middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Static files
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Database connection
-const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/insurance-crm', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error('Database connection failed:', error.message);
-    process.exit(1);
-  }
-};
-
-// Connect to database
-connectDB();
-
-// Health check route
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Server is running successfully',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
+// Activity logging middleware (before routes)
+app.use(activityLogger.middleware());
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/quotations', quotationRoutes);
-app.use('/api/invoices', invoiceRoutes);
-app.use('/api/communication', communicationRoutes);
-app.use('/api/broadcast', broadcastRoutes);
-app.use('/api/enhanced-broadcast', enhancedBroadcastRoutes);
-app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/activities', activitiesRoutes);
 
-// 404 handler
-app.all('*', (req, res, next) => {
-  res.status(404).json({
-    success: false,
-    message: `Can't find ${req.originalUrl} on this server!`
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'API is healthy' });
+});
+
+// Status endpoint
+app.get('/api/status', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    uptime: process.uptime(),
+    memoryUsage: process.memoryUsage(),
+    connections: mongoose.connections.length
   });
 });
 
-// Global error handler
-app.use(globalErrorHandler);
+// Error handling middleware
+app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+// Initialize WebSocket service
+const server = require('http').createServer(app);
+activityWebSocket.initialize(server);
 
-app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+// Start the server
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 module.exports = app;

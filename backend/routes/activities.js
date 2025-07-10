@@ -75,7 +75,7 @@ router.put('/settings', updateActivitySettings);
 
 /**
  * @route   GET /api/activities/:id
- * @desc    Get activity by ID
+ * @desc    Get single activity by ID
  * @access  Private (Super Admin only)
  */
 router.get('/:id', getActivityById);
