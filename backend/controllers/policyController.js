@@ -1,4 +1,3 @@
-
 const Policy = require('../models/Policy');
 const Client = require('../models/Client');
 const mongoose = require('mongoose');
@@ -875,6 +874,7 @@ const bulkAssignPolicies = async (req, res) => {
 // Export policies
 const exportPolicies = async (req, res) => {
   try {
+    const { format = 'csv' } = req.query;
     let filter = {};
 
     // Role-based filtering
@@ -882,22 +882,42 @@ const exportPolicies = async (req, res) => {
       filter.assignedAgentId = req.user.id;
     }
 
-    // Apply any additional filters from query
-    Object.keys(req.query).forEach(key => {
-      if (req.query[key] && key !== 'format') {
-        filter[key] = req.query[key];
-      }
-    });
-
     const policies = await Policy.find(filter)
       .populate('clientId', 'displayName email clientId')
-      .populate('assignedAgentId', 'name email');
+      .populate('assignedAgentId', 'name email')
+      .sort({ createdAt: -1 });
 
-    res.status(200).json({
-      success: true,
-      data: policies,
-      message: 'Policies exported successfully'
-    });
+    if (format === 'csv') {
+      // Convert to CSV format
+      const csvData = policies.map(policy => ({
+        'Policy Number': policy.policyNumber,
+        'Client Name': policy.clientId?.displayName || '',
+        'Type': policy.type,
+        'Status': policy.status,
+        'Premium': policy.premium,
+        'Sum Assured': policy.sumAssured,
+        'Start Date': policy.startDate?.toDateString(),
+        'End Date': policy.endDate?.toDateString(),
+        'Agent': policy.assignedAgentId?.name || '',
+        'Created Date': policy.createdAt?.toDateString()
+      }));
+
+      // Create CSV content
+      const headers = Object.keys(csvData[0] || {});
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => headers.map(header => `"${row[header] || ''}"`).join(','))
+      ].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=policies-export-${new Date().toISOString().split('T')[0]}.csv`);
+      res.send(csvContent);
+    } else {
+      res.status(200).json({
+        success: true,
+        data: policies
+      });
+    }
   } catch (error) {
     console.error('Error exporting policies:', error);
     res.status(500).json({

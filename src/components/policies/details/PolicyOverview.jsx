@@ -2,139 +2,264 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Shield, User, Calendar, DollarSign, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { 
+  Shield, 
+  User, 
+  Building2, 
+  Calendar, 
+  DollarSign, 
+  FileText, 
+  Phone, 
+  Mail,
+  Edit,
+  CreditCard
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '@/contexts/PermissionsContext';
 
 const PolicyOverview = ({ policy }) => {
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'Active':
-        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
-      case 'Expired':
-        return <Badge className="bg-red-100 text-red-800">Expired</Badge>;
-      case 'Pending':
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
-      case 'Cancelled':
-        return <Badge className="bg-gray-100 text-gray-800">Cancelled</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-800">{status}</Badge>;
-    }
+  const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('policies', 'edit');
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR'
+    }).format(amount || 0);
   };
 
-  const isExpiringSoon = () => {
-    if (!policy.endDate) return false;
-    const endDate = new Date(policy.endDate);
-    const today = new Date();
-    const daysUntilExpiry = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
-    return daysUntilExpiry <= 30 && daysUntilExpiry > 0;
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'Active': 'bg-green-100 text-green-800',
+      'Inactive': 'bg-gray-100 text-gray-800',
+      'Expired': 'bg-red-100 text-red-800',
+      'Cancelled': 'bg-orange-100 text-orange-800',
+      'Pending': 'bg-yellow-100 text-yellow-800',
+      'Proposal': 'bg-blue-100 text-blue-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  if (!policy) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">No policy data available</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Shield className="h-8 w-8 text-blue-500" />
-              <div>
-                <CardTitle className="text-xl">{policy.policyNumber}</CardTitle>
-                <p className="text-gray-600">{policy.type}</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              {getStatusBadge(policy.status)}
-              {isExpiringSoon() && (
-                <Badge className="bg-orange-100 text-orange-800">
-                  <AlertTriangle size={12} className="mr-1" />
-                  Expiring Soon
-                </Badge>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h3 className="font-medium text-gray-700">Policy Details</h3>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <DollarSign className="h-4 w-4 text-gray-400" />
-                  <span>Premium: ₹{policy.premium?.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Shield className="h-4 w-4 text-gray-400" />
-                  <span>Sum Assured: ₹{policy.sumAssured?.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-                  <span>Start Date: {new Date(policy.startDate).toLocaleDateString()}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-                  <span>End Date: {new Date(policy.endDate).toLocaleDateString()}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <h3 className="font-medium text-gray-700">Client Information</h3>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <User className="h-4 w-4 text-gray-400" />
-                  <span>{policy.client?.name || 'Unknown Client'}</span>
-                </div>
-                {policy.agent && (
-                  <div className="flex items-center space-x-2">
-                    <User className="h-4 w-4 text-gray-400" />
-                    <span>Agent: {policy.agent.name}</span>
-                  </div>
-                )}
-                {policy.paymentFrequency && (
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-gray-400" />
-                    <span>Payment: {policy.paymentFrequency}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Header */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{policy.policyNumber}</h2>
+          <p className="text-gray-600">{policy.planName}</p>
+        </div>
+        <div className="flex gap-2">
+          <Badge className={getStatusColor(policy.status)}>
+            {policy.status}
+          </Badge>
+          {canEdit && (
+            <Button 
+              size="sm" 
+              onClick={() => navigate(`/policies/${policy._id || policy.id}/edit`)}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Policy
+            </Button>
+          )}
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Client Information */}
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">
-              ₹{policy.premium?.toLocaleString() || '0'}
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <User className="h-5 w-5 mr-2" />
+              Client Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-500">Name</label>
+              <p className="font-medium">{policy.clientId?.displayName || policy.client?.name || 'N/A'}</p>
             </div>
-            <div className="text-sm text-gray-600">Annual Premium</div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Client ID</label>
+              <p>{policy.clientId?.clientId || policy.client?.clientId || 'N/A'}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Email</label>
+              <div className="flex items-center">
+                <Mail className="h-4 w-4 mr-2 text-gray-400" />
+                <p>{policy.clientId?.email || policy.client?.email || 'N/A'}</p>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Client Type</label>
+              <p className="capitalize">{policy.clientId?.clientType || policy.client?.type || 'N/A'}</p>
+            </div>
           </CardContent>
         </Card>
+
+        {/* Policy Details */}
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">
-              ₹{policy.sumAssured?.toLocaleString() || '0'}
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Shield className="h-5 w-5 mr-2" />
+              Policy Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-500">Type</label>
+              <p className="capitalize">{policy.type}</p>
             </div>
-            <div className="text-sm text-gray-600">Sum Assured</div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Category</label>
+              <p className="capitalize">{policy.category || 'Individual'}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Insurance Company</label>
+              <div className="flex items-center">
+                <Building2 className="h-4 w-4 mr-2 text-gray-400" />
+                <p>{policy.insuranceCompany}</p>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Plan Name</label>
+              <p>{policy.planName}</p>
+            </div>
           </CardContent>
         </Card>
+
+        {/* Financial Information */}
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-purple-600">
-              {policy.claims || 0}
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <DollarSign className="h-5 w-5 mr-2" />
+              Financial Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-500">Premium Amount</label>
+              <p className="font-semibold text-lg text-green-600">
+                {formatCurrency(policy.premium)}
+              </p>
             </div>
-            <div className="text-sm text-gray-600">Claims Filed</div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Sum Assured</label>
+              <p className="font-semibold text-lg">
+                {formatCurrency(policy.sumAssured || policy.coverageAmount)}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Payment Frequency</label>
+              <div className="flex items-center">
+                <CreditCard className="h-4 w-4 mr-2 text-gray-400" />
+                <p className="capitalize">{policy.paymentFrequency}</p>
+              </div>
+            </div>
+            {policy.commission && (
+              <div>
+                <label className="text-sm font-medium text-gray-500">Commission</label>
+                <p>{policy.commission.rate}% - {formatCurrency(policy.commission.amount)}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Coverage Period */}
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-orange-600">
-              {policy.documents || 0}
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Calendar className="h-5 w-5 mr-2" />
+              Coverage Period
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-500">Start Date</label>
+              <p>{formatDate(policy.startDate)}</p>
             </div>
-            <div className="text-sm text-gray-600">Documents</div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">End Date</label>
+              <p>{formatDate(policy.endDate)}</p>
+            </div>
+            {policy.maturityDate && (
+              <div>
+                <label className="text-sm font-medium text-gray-500">Maturity Date</label>
+                <p>{formatDate(policy.maturityDate)}</p>
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium text-gray-500">Grace Period</label>
+              <p>{policy.gracePeriod || 30} days</p>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Additional Details */}
+      {(policy.beneficiaries?.length > 0 || policy.nominees?.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <FileText className="h-5 w-5 mr-2" />
+              Beneficiaries & Nominees
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {policy.beneficiaries?.length > 0 && (
+              <div className="mb-4">
+                <h4 className="font-medium mb-2">Beneficiaries</h4>
+                <div className="space-y-2">
+                  {policy.beneficiaries.map((beneficiary, index) => (
+                    <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                      <div>
+                        <p className="font-medium">{beneficiary.name}</p>
+                        <p className="text-sm text-gray-600">{beneficiary.relationship}</p>
+                      </div>
+                      <Badge variant="outline">{beneficiary.percentage}%</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {policy.nominees?.length > 0 && (
+              <div>
+                <h4 className="font-medium mb-2">Nominees</h4>
+                <div className="space-y-2">
+                  {policy.nominees.map((nominee, index) => (
+                    <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                      <div>
+                        <p className="font-medium">{nominee.name}</p>
+                        <p className="text-sm text-gray-600">{nominee.relationship}</p>
+                      </div>
+                      <Badge variant="outline">{nominee.percentage}%</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

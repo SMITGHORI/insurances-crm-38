@@ -1,80 +1,27 @@
 
 import React, { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Plus, StickyNote, Trash2, User } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from '@/components/ui/input';
+import { 
+  StickyNote, 
+  Plus, 
+  User, 
+  Calendar,
+  MessageSquare
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { usePolicyNotes, useAddNote } from '@/hooks/usePolicyFeatures';
 
 const PolicyNotes = ({ policyId }) => {
-  const [notes, setNotes] = useState([
-    {
-      id: '1',
-      content: 'Client requested premium reduction. Discussed options for reducing coverage.',
-      priority: 'medium',
-      tags: ['premium', 'coverage'],
-      createdBy: 'Agent John',
-      createdAt: '2024-01-15T10:30:00Z',
-      isPrivate: false
-    },
-    {
-      id: '2',
-      content: 'Medical examination completed. All reports are satisfactory.',
-      priority: 'low',
-      tags: ['medical', 'examination'],
-      createdBy: 'Agent Smith',
-      createdAt: '2024-01-10T14:20:00Z',
-      isPrivate: false
-    }
-  ]);
+  const [showAddNote, setShowAddNote] = useState(false);
+  const [noteText, setNoteText] = useState('');
 
-  const [isNoteOpen, setIsNoteOpen] = useState(false);
-  const [noteForm, setNoteForm] = useState({
-    content: '',
-    priority: 'medium',
-    tags: '',
-    isPrivate: false
-  });
+  const { data: notes = [], isLoading, refetch } = usePolicyNotes(policyId);
+  const addNote = useAddNote();
 
-  const priorityColors = {
-    low: 'bg-gray-100 text-gray-800',
-    medium: 'bg-blue-100 text-blue-800',
-    high: 'bg-red-100 text-red-800'
-  };
-
-  const handleAddNote = () => {
-    if (!noteForm.content.trim()) {
-      toast.error('Please enter note content');
-      return;
-    }
-
-    const newNote = {
-      id: Date.now().toString(),
-      content: noteForm.content,
-      priority: noteForm.priority,
-      tags: noteForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-      createdBy: 'Current User',
-      createdAt: new Date().toISOString(),
-      isPrivate: noteForm.isPrivate
-    };
-
-    setNotes(prev => [newNote, ...prev]);
-    setNoteForm({ content: '', priority: 'medium', tags: '', isPrivate: false });
-    setIsNoteOpen(false);
-    toast.success('Note added successfully');
-  };
-
-  const handleDeleteNote = (noteId) => {
-    setNotes(prev => prev.filter(note => note.id !== noteId));
-    toast.success('Note deleted successfully');
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -83,117 +30,154 @@ const PolicyNotes = ({ policyId }) => {
     });
   };
 
+  const handleAddNote = async () => {
+    if (!noteText.trim()) {
+      toast.error('Please enter a note');
+      return;
+    }
+
+    try {
+      await addNote.mutateAsync({
+        policyId,
+        noteData: { note: noteText.trim() }
+      });
+
+      setNoteText('');
+      setShowAddNote(false);
+      refetch();
+    } catch (error) {
+      console.error('Add note error:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="animate-pulse space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 bg-gray-200 rounded"></div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-lg font-semibold">Policy Notes</h3>
-          <p className="text-sm text-gray-600">Keep track of important information about this policy</p>
+          <p className="text-sm text-gray-600">Track important information and updates</p>
         </div>
-        <Dialog open={isNoteOpen} onOpenChange={setIsNoteOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus size={16} className="mr-2" />
-              Add Note
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Add Note</DialogTitle>
-              <DialogDescription>
-                Add a new note for this policy
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Content</label>
-                <Textarea
-                  value={noteForm.content}
-                  onChange={(e) => setNoteForm(prev => ({ ...prev, content: e.target.value }))}
-                  placeholder="Enter note content..."
-                  rows={4}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Priority</label>
-                  <Select 
-                    value={noteForm.priority} 
-                    onValueChange={(value) => setNoteForm(prev => ({ ...prev, priority: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Tags</label>
-                  <Input
-                    value={noteForm.tags}
-                    onChange={(e) => setNoteForm(prev => ({ ...prev, tags: e.target.value }))}
-                    placeholder="premium, medical"
-                  />
-                </div>
-              </div>
+        <Button onClick={() => setShowAddNote(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Note
+        </Button>
+      </div>
+
+      {/* Add Note Form */}
+      {showAddNote && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Plus className="h-5 w-5 mr-2" />
+              Add New Note
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Note Content *</label>
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Enter your note here..."
+                className="w-full p-3 border border-gray-300 rounded-md"
+                rows="4"
+                required
+              />
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsNoteOpen(false)}>
+
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleAddNote}
+                disabled={addNote.isLoading || !noteText.trim()}
+              >
+                {addNote.isLoading ? 'Adding...' : 'Add Note'}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowAddNote(false);
+                  setNoteText('');
+                }}
+              >
                 Cancel
               </Button>
-              <Button onClick={handleAddNote}>
-                <StickyNote size={16} className="mr-2" />
-                Add Note
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
+      {/* Notes List */}
       <div className="space-y-4">
-        {notes.map(note => (
-          <Card key={note.id}>
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center space-x-2">
-                  <Badge className={priorityColors[note.priority]}>
-                    {note.priority.charAt(0).toUpperCase() + note.priority.slice(1)}
-                  </Badge>
-                  {note.tags.map(tag => (
-                    <Badge key={tag} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => handleDeleteNote(note.id)}>
-                  <Trash2 size={16} className="text-red-500" />
-                </Button>
-              </div>
-              
-              <p className="text-gray-800 mb-3">{note.content}</p>
-              
-              <div className="flex items-center justify-between text-sm text-gray-500">
-                <div className="flex items-center space-x-1">
-                  <User size={14} />
-                  <span>by {note.createdBy}</span>
-                </div>
-                <span>{formatDate(note.createdAt)}</span>
-              </div>
+        {notes.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <StickyNote className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No notes yet</h3>
+              <p className="text-gray-500 mb-4">Add notes to track important policy information</p>
+              <Button onClick={() => setShowAddNote(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add First Note
+              </Button>
             </CardContent>
           </Card>
-        ))}
+        ) : (
+          <div className="space-y-4">
+            {notes.map((note) => (
+              <Card key={note._id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-start space-x-4">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <MessageSquare className="h-5 w-5 text-blue-600" />
+                    </div>
+                    
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <User className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm font-medium">
+                            {note.addedBy?.name || 'Unknown User'}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            {formatDate(note.addedAt)}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-gray-800 whitespace-pre-wrap">{note.note}</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
-      {notes.length === 0 && (
+      {/* Notes Summary */}
+      {notes.length > 0 && (
         <Card>
-          <CardContent className="p-8 text-center">
-            <StickyNote className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No notes yet</h3>
-            <p className="text-gray-500">Add your first note to get started</p>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between text-sm text-gray-600">
+              <span>Total Notes: {notes.length}</span>
+              <span>
+                Latest: {notes.length > 0 ? formatDate(notes[0]?.addedAt) : 'N/A'}
+              </span>
+            </div>
           </CardContent>
         </Card>
       )}
