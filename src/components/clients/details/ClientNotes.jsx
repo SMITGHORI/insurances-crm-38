@@ -1,202 +1,268 @@
 
 import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Plus, StickyNote, Trash2, Edit, User } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { 
+  StickyNote, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  User, 
+  Calendar
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 const ClientNotes = ({ clientId }) => {
+  const [newNote, setNewNote] = useState('');
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [editingNote, setEditingNote] = useState(null);
+
+  // Mock notes data - replace with actual API call
   const [notes, setNotes] = useState([
     {
       id: '1',
-      content: 'Client is interested in increasing coverage amount. Schedule follow-up for policy review.',
+      content: 'Client is interested in health insurance with higher coverage. Discussed family floater options.',
+      createdAt: new Date(Date.now() - 86400000),
+      createdBy: 'Agent Smith',
       priority: 'high',
-      tags: ['follow-up', 'policy-review'],
-      createdBy: 'Agent John',
-      createdAt: '2024-01-15T10:30:00Z',
-      isPrivate: false
+      category: 'sales'
     },
     {
       id: '2',
-      content: 'Client prefers email communication over phone calls. Update communication preferences.',
+      content: 'Submitted all required documents. Processing pending for verification.',
+      createdAt: new Date(Date.now() - 172800000),
+      createdBy: 'System Admin',
       priority: 'medium',
-      tags: ['communication', 'preferences'],
+      category: 'documentation'
+    },
+    {
+      id: '3',
+      content: 'Client prefers digital communication via email. Updated preference in system.',
+      createdAt: new Date(Date.now() - 259200000),
       createdBy: 'Agent Smith',
-      createdAt: '2024-01-10T14:20:00Z',
-      isPrivate: false
+      priority: 'low',
+      category: 'preference'
     }
   ]);
 
-  const [isNoteOpen, setIsNoteOpen] = useState(false);
-  const [noteForm, setNoteForm] = useState({
-    content: '',
-    priority: 'medium',
-    tags: '',
-    isPrivate: false
-  });
-
-  const priorityColors = {
-    low: 'bg-gray-100 text-gray-800',
-    medium: 'bg-blue-100 text-blue-800',
-    high: 'bg-red-100 text-red-800'
-  };
-
   const handleAddNote = () => {
-    if (!noteForm.content.trim()) {
-      toast.error('Please enter note content');
+    if (!newNote.trim()) {
+      toast.error('Please enter a note');
       return;
     }
 
-    const newNote = {
+    const note = {
       id: Date.now().toString(),
-      content: noteForm.content,
-      priority: noteForm.priority,
-      tags: noteForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-      createdBy: 'Current User',
-      createdAt: new Date().toISOString(),
-      isPrivate: noteForm.isPrivate
+      content: newNote,
+      createdAt: new Date(),
+      createdBy: 'Current User', // Replace with actual user
+      priority: 'medium',
+      category: 'general'
     };
 
-    setNotes(prev => [newNote, ...prev]);
-    setNoteForm({ content: '', priority: 'medium', tags: '', isPrivate: false });
-    setIsNoteOpen(false);
+    setNotes([note, ...notes]);
+    setNewNote('');
+    setIsAddingNote(false);
     toast.success('Note added successfully');
   };
 
-  const handleDeleteNote = (noteId) => {
-    setNotes(prev => prev.filter(note => note.id !== noteId));
-    toast.success('Note deleted successfully');
+  const handleEditNote = (noteId, newContent) => {
+    setNotes(notes.map(note => 
+      note.id === noteId 
+        ? { ...note, content: newContent, updatedAt: new Date() }
+        : note
+    ));
+    setEditingNote(null);
+    toast.success('Note updated successfully');
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const handleDeleteNote = (noteId) => {
+    if (window.confirm('Are you sure you want to delete this note?')) {
+      setNotes(notes.filter(note => note.id !== noteId));
+      toast.success('Note deleted successfully');
+    }
+  };
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'high': return 'bg-red-100 text-red-800';
+      case 'medium': return 'bg-yellow-100 text-yellow-800';
+      case 'low': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getCategoryColor = (category) => {
+    switch (category) {
+      case 'sales': return 'bg-blue-100 text-blue-800';
+      case 'documentation': return 'bg-purple-100 text-purple-800';
+      case 'preference': return 'bg-indigo-100 text-indigo-800';
+      case 'follow-up': return 'bg-orange-100 text-orange-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">Client Notes</h3>
-          <p className="text-sm text-gray-600">Keep track of important information about this client</p>
-        </div>
-        <Dialog open={isNoteOpen} onOpenChange={setIsNoteOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus size={16} className="mr-2" />
-              Add Note
+      {/* Add Note Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center space-x-2">
+              <StickyNote className="h-5 w-5" />
+              <span>Client Notes</span>
+            </CardTitle>
+            <Button 
+              onClick={() => setIsAddingNote(!isAddingNote)}
+              className="flex items-center space-x-2"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Note</span>
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Add Note</DialogTitle>
-              <DialogDescription>
-                Add a new note for this client
-              </DialogDescription>
-            </DialogHeader>
+          </div>
+        </CardHeader>
+        
+        {isAddingNote && (
+          <CardContent className="border-t">
             <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Content</label>
-                <Textarea
-                  value={noteForm.content}
-                  onChange={(e) => setNoteForm(prev => ({ ...prev, content: e.target.value }))}
-                  placeholder="Enter note content..."
-                  rows={4}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Priority</label>
-                  <Select 
-                    value={noteForm.priority} 
-                    onValueChange={(value) => setNoteForm(prev => ({ ...prev, priority: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Tags</label>
-                  <Input
-                    value={noteForm.tags}
-                    onChange={(e) => setNoteForm(prev => ({ ...prev, tags: e.target.value }))}
-                    placeholder="follow-up, policy"
-                  />
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsNoteOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddNote}>
-                <StickyNote size={16} className="mr-2" />
-                Add Note
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="space-y-4">
-        {notes.map(note => (
-          <Card key={note.id}>
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center space-x-2">
-                  <Badge className={priorityColors[note.priority]}>
-                    {note.priority.charAt(0).toUpperCase() + note.priority.slice(1)}
-                  </Badge>
-                  {note.tags.map(tag => (
-                    <Badge key={tag} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => handleDeleteNote(note.id)}>
-                  <Trash2 size={16} className="text-red-500" />
+              <Textarea
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                placeholder="Enter your note here..."
+                rows={3}
+                className="w-full"
+              />
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsAddingNote(false);
+                    setNewNote('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleAddNote}>
+                  Save Note
                 </Button>
               </div>
-              
-              <p className="text-gray-800 mb-3">{note.content}</p>
-              
-              <div className="flex items-center justify-between text-sm text-gray-500">
-                <div className="flex items-center space-x-1">
-                  <User size={14} />
-                  <span>by {note.createdBy}</span>
-                </div>
-                <span>{formatDate(note.createdAt)}</span>
-              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Notes List */}
+      <div className="space-y-4">
+        {notes.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-8 text-gray-500">
+              <StickyNote className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p>No notes available</p>
             </CardContent>
           </Card>
-        ))}
+        ) : (
+          notes.map(note => (
+            <Card key={note.id}>
+              <CardContent className="p-4">
+                {editingNote === note.id ? (
+                  <EditNoteForm 
+                    note={note}
+                    onSave={(content) => handleEditNote(note.id, content)}
+                    onCancel={() => setEditingNote(null)}
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-900 leading-relaxed">
+                          {note.content}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2 ml-4">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setEditingNote(note.id)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleDeleteNote(note.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-1">
+                          <User className="h-3 w-3" />
+                          <span>{note.createdBy}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="h-3 w-3" />
+                          <span>{note.createdAt.toLocaleDateString()}</span>
+                        </div>
+                        {note.updatedAt && (
+                          <span className="text-gray-400">
+                            (edited {note.updatedAt.toLocaleDateString()})
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <Badge className={getPriorityColor(note.priority)} variant="outline">
+                          {note.priority}
+                        </Badge>
+                        <Badge className={getCategoryColor(note.category)} variant="outline">
+                          {note.category}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
+    </div>
+  );
+};
 
-      {notes.length === 0 && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <StickyNote className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No notes yet</h3>
-            <p className="text-gray-500">Add your first note to get started</p>
-          </CardContent>
-        </Card>
-      )}
+const EditNoteForm = ({ note, onSave, onCancel }) => {
+  const [content, setContent] = useState(note.content);
+
+  const handleSave = () => {
+    if (!content.trim()) {
+      toast.error('Note content cannot be empty');
+      return;
+    }
+    onSave(content);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        rows={3}
+        className="w-full"
+      />
+      <div className="flex justify-end space-x-2">
+        <Button variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button onClick={handleSave}>
+          Save Changes
+        </Button>
+      </div>
     </div>
   );
 };

@@ -2,153 +2,231 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
-  User, Building, Group, Mail, Phone, MapPin, 
-  Calendar, Briefcase, CreditCard, FileText 
+  User, 
+  Building, 
+  Users, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Calendar,
+  Edit,
+  FileText,
+  CreditCard
 } from 'lucide-react';
+import { getClientName } from '@/schemas/clientSchemas';
 
 const ClientOverview = ({ client }) => {
-  const getClientTypeIcon = () => {
-    switch (client.clientType || client.type) {
-      case 'individual':
-      case 'Individual':
-        return <User className="h-6 w-6 text-blue-500" />;
-      case 'corporate':
-      case 'Corporate':
-        return <Building className="h-6 w-6 text-purple-500" />;
-      case 'group':
-      case 'Group':
-        return <Group className="h-6 w-6 text-green-500" />;
-      default:
-        return <User className="h-6 w-6 text-gray-500" />;
+  if (!client) return null;
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'inactive': return 'bg-red-100 text-red-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getDisplayName = () => {
-    if (client.name) return client.name;
-    if (client.firstName && client.lastName) {
-      return `${client.firstName} ${client.lastName}`;
+  const getClientTypeIcon = (type) => {
+    switch (type?.toLowerCase()) {
+      case 'individual': return <User className="h-5 w-5" />;
+      case 'corporate': return <Building className="h-5 w-5" />;
+      case 'group': return <Users className="h-5 w-5" />;
+      default: return <User className="h-5 w-5" />;
     }
-    if (client.companyName) return client.companyName;
-    if (client.groupName) return client.groupName;
-    return 'Unknown Client';
   };
+
+  const clientName = getClientName(client);
 
   return (
     <div className="space-y-6">
+      {/* Header Card */}
       <Card>
         <CardHeader>
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-gray-100 rounded-full">
-              {getClientTypeIcon()}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              {getClientTypeIcon(client.clientType)}
+              <div>
+                <CardTitle className="text-2xl">{clientName}</CardTitle>
+                <p className="text-sm text-gray-600 capitalize">
+                  {client.clientType || 'Individual'} Client • ID: {client.clientId}
+                </p>
+              </div>
             </div>
-            <div>
-              <CardTitle className="text-xl font-semibold">{getDisplayName()}</CardTitle>
-              <p className="text-sm text-gray-500 font-mono">{client.clientId}</p>
-            </div>
-            <Badge className={client.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-              {client.status}
+            <Badge className={getStatusColor(client.status)}>
+              {client.status || 'Active'}
             </Badge>
           </div>
         </CardHeader>
-        
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h3 className="font-medium text-gray-700">Contact Information</h3>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Mail className="h-4 w-4 text-gray-400" />
-                  <span>{client.email || 'No email provided'}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Phone className="h-4 w-4 text-gray-400" />
-                  <span>{client.phone || client.contact || 'No contact provided'}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <MapPin className="h-4 w-4 text-gray-400" />
-                  <span>{client.address || client.location || 'No address provided'}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <h3 className="font-medium text-gray-700">Additional Information</h3>
-              {(client.clientType === 'individual' || client.type === 'Individual') && (
-                <div className="space-y-2">
-                  {client.dob && (
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="h-4 w-4 text-gray-400" />
-                      <span>DOB: {new Date(client.dob).toLocaleDateString()}</span>
-                    </div>
-                  )}
-                  {client.occupation && (
-                    <div className="flex items-center space-x-2">
-                      <Briefcase className="h-4 w-4 text-gray-400" />
-                      <span>Occupation: {client.occupation}</span>
-                    </div>
-                  )}
-                  {client.panNumber && (
-                    <div className="flex items-center space-x-2">
-                      <CreditCard className="h-4 w-4 text-gray-400" />
-                      <span>PAN: {client.panNumber}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {(client.clientType === 'corporate' || client.type === 'Corporate') && (
-                <div className="space-y-2">
-                  {client.registrationNo && (
-                    <div className="flex items-center space-x-2">
-                      <FileText className="h-4 w-4 text-gray-400" />
-                      <span>Registration: {client.registrationNo}</span>
-                    </div>
-                  )}
-                  {client.gstNumber && (
-                    <div className="flex items-center space-x-2">
-                      <CreditCard className="h-4 w-4 text-gray-400" />
-                      <span>GST: {client.gstNumber}</span>
-                    </div>
-                  )}
-                  {client.industry && (
-                    <div className="flex items-center space-x-2">
-                      <Building className="h-4 w-4 text-gray-400" />
-                      <span>Industry: {client.industry}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Contact Information */}
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">
-              {client.policies || 0}
-            </div>
-            <div className="text-sm text-gray-600">Active Policies</div>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Phone className="h-5 w-5" />
+              <span>Contact Information</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {client.email && (
+              <div className="flex items-center space-x-3">
+                <Mail className="h-4 w-4 text-gray-500" />
+                <span className="text-sm">{client.email}</span>
+              </div>
+            )}
+            {client.phone && (
+              <div className="flex items-center space-x-3">
+                <Phone className="h-4 w-4 text-gray-500" />
+                <span className="text-sm">{client.phone}</span>
+              </div>
+            )}
+            {client.altPhone && (
+              <div className="flex items-center space-x-3">
+                <Phone className="h-4 w-4 text-gray-500" />
+                <span className="text-sm">{client.altPhone} (Alt)</span>
+              </div>
+            )}
+            {(client.address || client.city || client.state) && (
+              <div className="flex items-start space-x-3">
+                <MapPin className="h-4 w-4 text-gray-500 mt-1" />
+                <div className="text-sm">
+                  {client.address && <div>{client.address}</div>}
+                  {(client.city || client.state) && (
+                    <div>{client.city}{client.city && client.state && ', '}{client.state}</div>
+                  )}
+                  {client.pincode && <div>{client.pincode}</div>}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Client Details */}
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">
-              ₹{client.totalPremium?.toLocaleString() || '0'}
-            </div>
-            <div className="text-sm text-gray-600">Total Premium</div>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <FileText className="h-5 w-5" />
+              <span>Client Details</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {client.clientType === 'individual' && (
+              <>
+                {client.dob && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Date of Birth</span>
+                    <span className="text-sm">{new Date(client.dob).toLocaleDateString()}</span>
+                  </div>
+                )}
+                {client.gender && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Gender</span>
+                    <span className="text-sm capitalize">{client.gender}</span>
+                  </div>
+                )}
+                {client.occupation && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Occupation</span>
+                    <span className="text-sm">{client.occupation}</span>
+                  </div>
+                )}
+                {client.annualIncome && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Annual Income</span>
+                    <span className="text-sm">₹{client.annualIncome.toLocaleString()}</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {client.clientType === 'corporate' && (
+              <>
+                {client.registrationNo && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Registration No</span>
+                    <span className="text-sm">{client.registrationNo}</span>
+                  </div>
+                )}
+                {client.industry && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Industry</span>
+                    <span className="text-sm">{client.industry}</span>
+                  </div>
+                )}
+                {client.employeeCount && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Employees</span>
+                    <span className="text-sm">{client.employeeCount}</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {client.clientType === 'group' && (
+              <>
+                {client.groupType && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Group Type</span>
+                    <span className="text-sm capitalize">{client.groupType}</span>
+                  </div>
+                )}
+                {client.memberCount && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Members</span>
+                    <span className="text-sm">{client.memberCount}</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {client.createdAt && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Client Since</span>
+                <span className="text-sm">{new Date(client.createdAt).toLocaleDateString()}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Policy Summary */}
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-purple-600">
-              {client.claims || 0}
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <CreditCard className="h-5 w-5" />
+              <span>Policy Summary</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Total Policies</span>
+              <span className="text-sm font-bold">{client.totalPolicies || 0}</span>
             </div>
-            <div className="text-sm text-gray-600">Claims Filed</div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Total Premium</span>
+              <span className="text-sm font-bold">₹{(client.totalPremium || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Active Policies</span>
+              <span className="text-sm">0</span>
+            </div>
           </CardContent>
         </Card>
+
+        {/* Notes */}
+        {client.notes && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Notes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600">{client.notes}</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -2,207 +2,189 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, FileText, Trash2, Download, Upload } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { 
+  Upload, 
+  FileText, 
+  Download, 
+  Trash2, 
+  Eye,
+  Calendar,
+  User
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { useUploadDocument } from '@/hooks/useClients';
 
 const ClientDocuments = ({ clientId }) => {
-  const [documents, setDocuments] = useState([
-    {
-      id: '1',
-      name: 'PAN Card',
-      type: 'pan',
-      url: '/docs/pan.pdf',
-      size: '1.2 MB',
-      uploadedAt: '2024-01-15',
-      status: 'verified'
-    },
-    {
-      id: '2',
-      name: 'Aadhaar Card',
-      type: 'aadhaar',
-      url: '/docs/aadhaar.pdf',
-      size: '0.8 MB',
-      uploadedAt: '2024-01-10',
-      status: 'pending'
-    }
-  ]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [documentType, setDocumentType] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
-  const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [uploadForm, setUploadForm] = useState({
-    file: null,
-    name: '',
-    type: ''
-  });
+  const uploadDocumentMutation = useUploadDocument();
 
   const documentTypes = [
     { value: 'pan', label: 'PAN Card' },
     { value: 'aadhaar', label: 'Aadhaar Card' },
-    { value: 'passport', label: 'Passport' },
-    { value: 'drivingLicense', label: 'Driving License' },
+    { value: 'idProof', label: 'ID Proof' },
     { value: 'addressProof', label: 'Address Proof' },
-    { value: 'incomeProof', label: 'Income Proof' },
-    { value: 'other', label: 'Other' }
+    { value: 'gst', label: 'GST Certificate' },
+    { value: 'registration', label: 'Registration Document' }
   ];
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'verified':
-        return <Badge className="bg-green-100 text-green-800">Verified</Badge>;
-      case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
-      case 'rejected':
-        return <Badge className="bg-red-100 text-red-800">Rejected</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-800">{status}</Badge>;
-    }
-  };
-
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setUploadForm(prev => ({ ...prev, file, name: file.name }));
-    }
-  };
-
-  const handleUploadSubmit = () => {
-    if (!uploadForm.file || !uploadForm.name || !uploadForm.type) {
-      toast.error('Please fill all required fields');
+  const handleFileUpload = async () => {
+    if (!selectedFile || !documentType) {
+      toast.error('Please select a file and document type');
       return;
     }
 
-    const newDocument = {
-      id: Date.now().toString(),
-      name: uploadForm.name,
-      type: uploadForm.type,
-      url: '#',
-      size: `${(uploadForm.file.size / 1024 / 1024).toFixed(1)} MB`,
-      uploadedAt: new Date().toISOString().split('T')[0],
-      status: 'pending'
-    };
-
-    setDocuments(prev => [...prev, newDocument]);
-    setUploadForm({ file: null, name: '', type: '' });
-    setIsUploadOpen(false);
-    toast.success('Document uploaded successfully');
+    try {
+      setIsUploading(true);
+      await uploadDocumentMutation.mutateAsync({
+        clientId,
+        documentType,
+        file: selectedFile
+      });
+      
+      // Reset form
+      setSelectedFile(null);
+      setDocumentType('');
+      toast.success('Document uploaded successfully');
+    } catch (error) {
+      toast.error('Failed to upload document');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  const handleDeleteDocument = (docId) => {
-    setDocuments(prev => prev.filter(doc => doc.id !== docId));
-    toast.success('Document deleted successfully');
+  const mockDocuments = [
+    {
+      id: '1',
+      type: 'pan',
+      name: 'PAN_Card.pdf',
+      size: '245 KB',
+      uploadedAt: new Date(),
+      uploadedBy: 'System Admin'
+    },
+    {
+      id: '2',
+      type: 'aadhaar',
+      name: 'Aadhaar_Card.pdf',
+      size: '189 KB',
+      uploadedAt: new Date(Date.now() - 86400000),
+      uploadedBy: 'Agent Smith'
+    }
+  ];
+
+  const getDocumentTypeLabel = (type) => {
+    const docType = documentTypes.find(dt => dt.value === type);
+    return docType ? docType.label : type;
+  };
+
+  const getDocumentIcon = (filename) => {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    return <FileText className="h-5 w-5 text-blue-600" />;
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">Client Documents</h3>
-          <p className="text-sm text-gray-600">Manage client identification and verification documents</p>
-        </div>
-        <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus size={16} className="mr-2" />
-              Upload Document
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Upload Document</DialogTitle>
-              <DialogDescription>
-                Upload a new document for this client
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">File</label>
-                <Input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  onChange={handleFileUpload}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Document Name</label>
-                <Input
-                  value={uploadForm.name}
-                  onChange={(e) => setUploadForm(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter document name"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Document Type</label>
-                <Select 
-                  value={uploadForm.type} 
-                  onValueChange={(value) => setUploadForm(prev => ({ ...prev, type: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select document type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {documentTypes.map(type => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+      {/* Upload Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Upload className="h-5 w-5" />
+            <span>Upload Document</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Document Type</label>
+              <select
+                value={documentType}
+                onChange={(e) => setDocumentType(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select document type</option>
+                {documentTypes.map(type => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsUploadOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleUploadSubmit}>
-                <Upload size={16} className="mr-2" />
-                Upload
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">Select File</label>
+              <input
+                type="file"
+                onChange={(e) => setSelectedFile(e.target.files[0])}
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          
+          <Button 
+            onClick={handleFileUpload}
+            disabled={!selectedFile || !documentType || isUploading}
+            className="w-full md:w-auto"
+          >
+            {isUploading ? 'Uploading...' : 'Upload Document'}
+          </Button>
+        </CardContent>
+      </Card>
 
-      <div className="grid gap-4">
-        {documents.map(doc => (
-          <Card key={doc.id}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <FileText className="h-8 w-8 text-blue-500" />
-                  <div>
-                    <h4 className="font-medium">{doc.name}</h4>
-                    <p className="text-sm text-gray-500">
-                      {doc.size} • Uploaded {doc.uploadedAt}
-                    </p>
+      {/* Documents List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Uploaded Documents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {mockDocuments.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p>No documents uploaded yet</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {mockDocuments.map(doc => (
+                <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                  <div className="flex items-center space-x-4">
+                    {getDocumentIcon(doc.name)}
+                    <div>
+                      <h4 className="font-medium">{doc.name}</h4>
+                      <div className="flex items-center space-x-4 text-sm text-gray-500">
+                        <Badge variant="outline">{getDocumentTypeLabel(doc.type)}</Badge>
+                        <span>{doc.size}</span>
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="h-3 w-3" />
+                          <span>{doc.uploadedAt.toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <User className="h-3 w-3" />
+                          <span>{doc.uploadedBy}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Button variant="outline" size="sm">
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  {getStatusBadge(doc.status)}
-                  <Button variant="ghost" size="sm">
-                    <Download size={16} />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDeleteDocument(doc.id)}>
-                    <Trash2 size={16} className="text-red-500" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {documents.length === 0 && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No documents uploaded</h3>
-            <p className="text-gray-500">Upload documents to verify client identity</p>
-          </CardContent>
-        </Card>
-      )}
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
