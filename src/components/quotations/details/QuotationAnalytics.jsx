@@ -1,177 +1,278 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, Eye, Clock, Send, Target, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { 
+  TrendingUp, 
+  TrendingDown, 
+  Eye, 
+  Clock, 
+  DollarSign,
+  Users,
+  Calendar,
+  BarChart3
+} from 'lucide-react';
 
 const QuotationAnalytics = ({ quotationId }) => {
-  // Mock analytics data
-  const analytics = {
-    views: {
-      total: 3,
-      unique: 2,
-      lastViewed: '2025-06-02T11:15:00Z'
+  const [timeRange, setTimeRange] = useState('7d');
+
+  // Mock analytics data - would come from API
+  const analyticsData = {
+    performance: {
+      views: 145,
+      viewsChange: 12.5,
+      conversionRate: 15.2,
+      conversionChange: -2.1,
+      avgResponseTime: '2.4 hours',
+      responseTimeChange: -15.3
     },
     engagement: {
-      timeOnPage: '2m 45s',
-      sections: [
-        { name: 'Overview', views: 3, percentage: 100 },
-        { name: 'Product Details', views: 2, percentage: 67 },
-        { name: 'Terms & Conditions', views: 1, percentage: 33 }
-      ]
+      emailOpens: 89,
+      linkClicks: 34,
+      documentsDownloaded: 12,
+      timeSpent: '8m 32s'
     },
     comparison: {
-      similarQuotations: 15,
-      averageViewTime: '1m 30s',
-      conversionRate: 35
+      industryAvg: {
+        conversionRate: 18.5,
+        responseTime: '3.2 hours',
+        viewRate: 65.2
+      },
+      yourAvg: {
+        conversionRate: 15.2,
+        responseTime: '2.4 hours',
+        viewRate: 72.1
+      }
     },
-    timeline: [
-      { date: '2025-06-02', views: 2, duration: '3m 15s' },
-      { date: '2025-06-01', views: 1, duration: '2m 30s' }
+    trends: [
+      { period: 'Jan', quotations: 45, conversions: 8 },
+      { period: 'Feb', quotations: 52, conversions: 12 },
+      { period: 'Mar', quotations: 38, conversions: 6 },
+      { period: 'Apr', quotations: 61, conversions: 15 },
+      { period: 'May', quotations: 48, conversions: 9 },
+      { period: 'Jun', quotations: 55, conversions: 11 }
     ]
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  const MetricCard = ({ title, value, change, icon: Icon, trend }) => (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">{title}</p>
+            <p className="text-2xl font-bold">{value}</p>
+            {change && (
+              <div className="flex items-center gap-1 mt-1">
+                {trend === 'up' ? (
+                  <TrendingUp className="h-3 w-3 text-green-600" />
+                ) : (
+                  <TrendingDown className="h-3 w-3 text-red-600" />
+                )}
+                <span className={`text-xs ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+                  {Math.abs(change)}%
+                </span>
+              </div>
+            )}
+          </div>
+          <Icon className="h-8 w-8 text-gray-400" />
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold">Quotation Analytics</h3>
-        <p className="text-sm text-gray-600">Track engagement and performance metrics</p>
-      </div>
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-2 mb-2">
-              <Eye className="h-5 w-5 text-blue-500" />
-              <span className="text-sm font-medium text-gray-600">Total Views</span>
-            </div>
-            <div className="text-2xl font-bold text-blue-600">{analytics.views.total}</div>
-            <p className="text-xs text-gray-500 mt-1">
-              Last viewed: {formatDate(analytics.views.lastViewed)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-2 mb-2">
-              <Clock className="h-5 w-5 text-green-500" />
-              <span className="text-sm font-medium text-gray-600">Avg. Time</span>
-            </div>
-            <div className="text-2xl font-bold text-green-600">{analytics.engagement.timeOnPage}</div>
-            <p className="text-xs text-gray-500 mt-1">
-              Industry avg: {analytics.comparison.averageViewTime}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-2 mb-2">
-              <Users className="h-5 w-5 text-purple-500" />
-              <span className="text-sm font-medium text-gray-600">Unique Viewers</span>
-            </div>
-            <div className="text-2xl font-bold text-purple-600">{analytics.views.unique}</div>
-            <p className="text-xs text-gray-500 mt-1">
-              {Math.round((analytics.views.unique / analytics.views.total) * 100)}% unique rate
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Section Engagement */}
+      {/* Time Range Selector */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <TrendingUp className="h-5 w-5" />
-            <span>Section Engagement</span>
-          </CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle>Analytics Dashboard</CardTitle>
+            <div className="flex gap-2">
+              {['7d', '30d', '90d', '1y'].map((range) => (
+                <Button
+                  key={range}
+                  size="sm"
+                  variant={timeRange === range ? 'default' : 'outline'}
+                  onClick={() => setTimeRange(range)}
+                >
+                  {range}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title="Total Views"
+          value={analyticsData.performance.views}
+          change={analyticsData.performance.viewsChange}
+          trend="up"
+          icon={Eye}
+        />
+        <MetricCard
+          title="Conversion Rate"
+          value={`${analyticsData.performance.conversionRate}%`}
+          change={analyticsData.performance.conversionChange}
+          trend="down"
+          icon={TrendingUp}
+        />
+        <MetricCard
+          title="Avg Response Time"
+          value={analyticsData.performance.avgResponseTime}
+          change={analyticsData.performance.responseTimeChange}
+          trend="up"
+          icon={Clock}
+        />
+        <MetricCard
+          title="Email Opens"
+          value={analyticsData.engagement.emailOpens}
+          icon={Users}
+        />
+      </div>
+
+      {/* Engagement Metrics */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Engagement Metrics</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {analytics.engagement.sections.map((section, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium">{section.name}</span>
-                    <span className="text-sm text-gray-500">{section.views} views</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-500 h-2 rounded-full" 
-                      style={{ width: `${section.percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
-                <Badge variant="secondary" className="ml-4">
-                  {section.percentage}%
-                </Badge>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {analyticsData.engagement.emailOpens}
               </div>
-            ))}
+              <p className="text-sm text-gray-600">Email Opens</p>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">
+                {analyticsData.engagement.linkClicks}
+              </div>
+              <p className="text-sm text-gray-600">Link Clicks</p>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">
+                {analyticsData.engagement.documentsDownloaded}
+              </div>
+              <p className="text-sm text-gray-600">Downloads</p>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">
+                {analyticsData.engagement.timeSpent}
+              </div>
+              <p className="text-sm text-gray-600">Avg Time Spent</p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Performance Comparison */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Target className="h-5 w-5" />
-            <span>Performance Comparison</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">Similar Quotations</p>
-              <p className="text-xl font-bold text-blue-600">{analytics.comparison.similarQuotations}</p>
-              <p className="text-xs text-gray-500">in this category</p>
-            </div>
-            
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">Conversion Rate</p>
-              <p className="text-xl font-bold text-green-600">{analytics.comparison.conversionRate}%</p>
-              <p className="text-xs text-gray-500">industry average</p>
-            </div>
-            
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">Performance</p>
-              <p className="text-xl font-bold text-purple-600">Above Avg</p>
-              <p className="text-xs text-gray-500">compared to similar</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Industry Comparison</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm">Conversion Rate</span>
+                  <div className="flex gap-2">
+                    <Badge variant="outline">You: {analyticsData.comparison.yourAvg.conversionRate}%</Badge>
+                    <Badge>Industry: {analyticsData.comparison.industryAvg.conversionRate}%</Badge>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full" 
+                    style={{ width: `${(analyticsData.comparison.yourAvg.conversionRate / analyticsData.comparison.industryAvg.conversionRate) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
 
-      {/* View Timeline */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm">Response Time</span>
+                  <div className="flex gap-2">
+                    <Badge variant="outline">You: {analyticsData.comparison.yourAvg.responseTime}</Badge>
+                    <Badge>Industry: {analyticsData.comparison.industryAvg.responseTime}</Badge>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '75%' }}></div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm">View Rate</span>
+                  <div className="flex gap-2">
+                    <Badge variant="outline">You: {analyticsData.comparison.yourAvg.viewRate}%</Badge>
+                    <Badge>Industry: {analyticsData.comparison.industryAvg.viewRate}%</Badge>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-purple-600 h-2 rounded-full" style={{ width: '110%' }}></div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Monthly Trends</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {analyticsData.trends.map((trend, index) => (
+                <div key={index} className="flex items-center justify-between p-2 border rounded">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 text-sm font-medium">{trend.period}</div>
+                    <div className="flex-1">
+                      <div className="text-sm">
+                        <span className="font-medium">{trend.quotations}</span> quotations
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {trend.conversions} conversions ({((trend.conversions / trend.quotations) * 100).toFixed(1)}%)
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-16 bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full" 
+                      style={{ width: `${(trend.conversions / trend.quotations) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recommendations */}
       <Card>
         <CardHeader>
-          <CardTitle>View Timeline</CardTitle>
+          <CardTitle>Recommendations</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {analytics.timeline.map((entry, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium">{entry.date}</p>
-                  <p className="text-sm text-gray-600">{entry.views} views</p>
-                </div>
-                <Badge variant="outline">
-                  {entry.duration}
-                </Badge>
-              </div>
-            ))}
+            <div className="p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
+              <p className="text-sm font-medium text-blue-800">Improve Response Time</p>
+              <p className="text-sm text-blue-700">Your response time is better than industry average. Consider automating follow-ups to maintain this advantage.</p>
+            </div>
+            <div className="p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+              <p className="text-sm font-medium text-yellow-800">Increase Conversion Rate</p>
+              <p className="text-sm text-yellow-700">Your conversion rate is below industry average. Consider personalizing quotations and adding value propositions.</p>
+            </div>
+            <div className="p-3 bg-green-50 border-l-4 border-green-400 rounded">
+              <p className="text-sm font-medium text-green-800">Excellent View Rate</p>
+              <p className="text-sm text-green-700">Your quotations are being viewed more than industry average. Keep up the good work with email subject lines!</p>
+            </div>
           </div>
         </CardContent>
       </Card>
