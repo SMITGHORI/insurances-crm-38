@@ -1,11 +1,12 @@
 
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Database } from 'lucide-react';
+import { AlertCircle, Database, Eye, MoreHorizontal } from 'lucide-react';
 
-const ActivitiesDesktopView = ({ activities, loading, getActivityIcon, formatDate }) => {
+const ActivitiesDesktopView = ({ activities, loading, getActivityIcon, formatDate, onView }) => {
   if (loading) {
     return (
       <Card className="mt-6">
@@ -60,6 +61,16 @@ const ActivitiesDesktopView = ({ activities, loading, getActivityIcon, formatDat
     }
   };
 
+  const getSeverityColor = (severity) => {
+    switch (severity) {
+      case 'critical': return 'border-l-red-500';
+      case 'high': return 'border-l-orange-500';
+      case 'medium': return 'border-l-yellow-500';
+      case 'low': return 'border-l-green-500';
+      default: return 'border-l-gray-300';
+    }
+  };
+
   return (
     <Card className="mt-6">
       <CardHeader>
@@ -79,11 +90,16 @@ const ActivitiesDesktopView = ({ activities, loading, getActivityIcon, formatDat
                 <TableHead>Operation</TableHead>
                 <TableHead>User</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-20">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {activities.map((activity) => (
-                <TableRow key={activity._id || activity.activityId || activity.id}>
+                <TableRow 
+                  key={activity._id || activity.activityId || activity.id}
+                  className={`border-l-4 ${getSeverityColor(activity.severity)}`}
+                >
                   <TableCell>
                     {getActivityIcon(activity.type)}
                   </TableCell>
@@ -131,6 +147,33 @@ const ActivitiesDesktopView = ({ activities, loading, getActivityIcon, formatDat
                     <p className="text-sm">
                       {formatDate(activity.createdAt)}
                     </p>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant={activity.isSuccessful ? "default" : "destructive"}
+                      className="text-xs"
+                    >
+                      {activity.isSuccessful ? 'Success' : 'Failed'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onView?.(activity)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

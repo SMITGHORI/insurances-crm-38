@@ -4,7 +4,7 @@ import ActivityItem from './ActivityItem';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
-const ActivitiesMobileView = ({ activities, loading }) => {
+const ActivitiesMobileView = ({ activities, loading, onView, onSelect }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -35,7 +35,9 @@ const ActivitiesMobileView = ({ activities, loading }) => {
       {activities.map((activity) => (
         <ActivityItem 
           key={activity._id || activity.activityId || activity.id} 
-          activity={activity} 
+          activity={activity}
+          onView={onView}
+          onSelect={onSelect}
         />
       ))}
       

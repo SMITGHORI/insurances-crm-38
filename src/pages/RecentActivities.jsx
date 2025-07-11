@@ -13,39 +13,47 @@ import {
   Wifi,
   RefreshCw,
   Settings,
-  Download
+  Download,
+  BarChart3,
+  Filter,
+  Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import ActivityFilters from '@/components/activities/ActivityFilters';
 import ActivityTabs from '@/components/activities/ActivityTabs';
 import ActivitiesMobileView from '@/components/activities/ActivitiesMobileView';
 import ActivitiesDesktopView from '@/components/activities/ActivitiesDesktopView';
 import ActivityManager from '@/components/activities/ActivityManager';
-import { useActivities, useRealtimeActivities } from '@/hooks/useRecentActivities';
-import { useActivityWebSocket } from '@/hooks/useActivityWebSocket';
 import AdvancedActivityFilters from '@/components/activities/AdvancedActivityFilters';
 import ActivityAnalytics from '@/components/activities/ActivityAnalytics';
+import ActivityViewModal from '@/components/activities/ActivityViewModal';
+import { useActivities, useRealtimeActivities, useActivityStats, useActivityFilters } from '@/hooks/useRecentActivities';
+import { useActivityWebSocket } from '@/hooks/useActivityWebSocket';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
-import { useOptimizedQuery } from '@/hooks/useOptimizedQuery';
-import { usePerformanceMonitor } from '@/hooks/usePerformanceMonitor';
 import { useDebouncedValue } from '@/hooks/useDebouncedSearch';
 
 const RecentActivities = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
-  const [dateFilter, setDateFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [agentFilter, setAgentFilter] = useState('all');
+  const [filters, setFilters] = useState({
+    type: 'all',
+    operation: 'all',
+    dateFilter: 'all',
+    severity: 'all',
+    category: 'all'
+  });
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showManager, setShowManager] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedActivityIds, setSelectedActivityIds] = useState([]);
+  const [selectedActivity, setSelectedActivity] = useState(null);
+  const [showActivityModal, setShowActivityModal] = useState(false);
   const isMobile = useIsMobile();
-
-  // Performance monitoring
-  const { renderTime } = usePerformanceMonitor('RecentActivities');
 
   // Debounced search for better performance
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
@@ -53,15 +61,19 @@ const RecentActivities = () => {
   // Memoized query parameters
   const queryParams = useMemo(() => ({
     search: debouncedSearchQuery,
-    type: activeTab !== 'all' ? activeTab : typeFilter,
-    dateFilter,
-    agentId: agentFilter !== 'all' ? agentFilter : undefined,
+    type: activeTab !== 'all' ? activeTab : filters.type,
+    operation: filters.operation,
+    dateFilter: filters.dateFilter,
+    severity: filters.severity,
+    category: filters.category,
     page: 1,
     limit: 100
-  }), [debouncedSearchQuery, activeTab, typeFilter, dateFilter, agentFilter]);
+  }), [debouncedSearchQuery, activeTab, filters]);
 
-  // Use MongoDB-connected activities hook
+  // Use MongoDB-connected activities hooks
   const { data: activitiesData, isLoading, error, refetch } = useActivities(queryParams);
+  const { data: statsData } = useActivityStats('7d');
+  const { data: filtersData } = useActivityFilters();
 
   // Set up real-time updates
   const { refreshActivities } = useRealtimeActivities();
@@ -107,11 +119,14 @@ const RecentActivities = () => {
     });
   }, [activities, debouncedSearchQuery, activeTab]);
 
-  // Memoized unique agents from MongoDB data
-  const uniqueAgents = useMemo(() => 
-    [...new Set(activities.map(activity => activity.userName))].filter(Boolean).sort(),
-    [activities]
-  );
+  // Activity counts for tabs
+  const activityCounts = useMemo(() => {
+    const counts = { total: activities.length };
+    activities.forEach(activity => {
+      counts[activity.type] = (counts[activity.type] || 0) + 1;
+    });
+    return counts;
+  }, [activities]);
 
   // Set up real-time listeners for cross-module updates
   useEffect(() => {
@@ -146,15 +161,23 @@ const RecentActivities = () => {
     };
   }, [refreshActivities]);
 
-  // Memoized callback functions
+  // Callback functions
   const handleResetFilters = useCallback(() => {
     setSearchQuery('');
     setActiveTab('all');
-    setDateFilter('all');
-    setTypeFilter('all');
-    setAgentFilter('all');
+    setFilters({
+      type: 'all',
+      operation: 'all',
+      dateFilter: 'all',
+      severity: 'all',
+      category: 'all'
+    });
     setSelectedActivityIds([]);
     toast.success('Filters have been reset');
+  }, []);
+
+  const handleFilterChange = useCallback((key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -175,27 +198,26 @@ const RecentActivities = () => {
   const handleExportActivities = useCallback(() => {
     try {
       const csvContent = [
-        ['ID', 'Description', 'Type', 'Operation', 'User', 'Entity', 'Date'].join(','),
+        ['ID', 'Description', 'Type', 'Operation', 'User', 'Entity', 'Date', 'Status'],
         ...filteredActivities.map(activity => [
           activity.activityId,
-          `"${activity.description.replace(/"/g, '""')}"`,
+          activity.description,
           activity.type,
           activity.operation,
           activity.userName,
-          activity.entityName,
-          new Date(activity.createdAt).toISOString()
-        ].join(','))
-      ].join('\n');
+          `${activity.entityType}: ${activity.entityName}`,
+          new Date(activity.createdAt).toLocaleString(),
+          activity.isSuccessful ? 'Success' : 'Failed'
+        ])
+      ].map(row => row.join(',')).join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `activities-${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(url);
       
       toast.success('Activities exported successfully');
     } catch (error) {
@@ -204,65 +226,44 @@ const RecentActivities = () => {
     }
   }, [filteredActivities]);
 
-  const getActivityIcon = useCallback((type) => {
+  const handleViewActivity = useCallback((activity) => {
+    setSelectedActivity(activity);
+    setShowActivityModal(true);
+  }, []);
+
+  const handleUpdateActivities = useCallback(() => {
+    refreshActivities();
+  }, [refreshActivities]);
+
+  const getActivityIcon = (type) => {
     switch (type) {
-      case 'client':
-        return <Users className="h-5 w-5 text-amba-blue" />;
-      case 'policy':
-        return <FileText className="h-5 w-5 text-amba-orange" />;
-      case 'claim':
-        return <ShieldCheck className="h-5 w-5 text-green-500" />;
-      case 'reminder':
-        return <Clock className="h-5 w-5 text-yellow-500" />;
-      case 'quotation':
-        return <FileText className="h-5 w-5 text-purple-500" />;
-      case 'lead':
-        return <Star className="h-5 w-5 text-yellow-500" />;
-      case 'payment':
-        return <FileText className="h-5 w-5 text-green-500" />;
-      case 'document':
-        return <FileText className="h-5 w-5 text-blue-500" />;
-      case 'commission':
-        return <FileText className="h-5 w-5 text-amba-orange" />;
-      default:
-        return <AlertCircle className="h-5 w-5 text-gray-500" />;
+      case 'client': return <Users className="h-4 w-4 text-blue-500" />;
+      case 'policy': return <FileText className="h-4 w-4 text-green-500" />;
+      case 'claim': return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+      case 'quotation': return <Quote className="h-4 w-4 text-purple-500" />;
+      case 'lead': return <TrendingUp className="h-4 w-4 text-indigo-500" />;
+      default: return <Activity className="h-4 w-4 text-gray-500" />;
     }
-  }, []);
+  };
 
-  const formatDate = useCallback((dateString) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString('en-IN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (e) {
-      console.error("Date formatting error:", e);
-      return dateString;
-    }
-  }, []);
+  const formatDate = (dateString) => {
+    return format(new Date(dateString), 'MMM dd, yyyy HH:mm');
+  };
 
-  // Show professional loading skeleton
   if (isLoading) {
-    return <PageSkeleton isMobile={isMobile} />;
+    return <PageSkeleton />;
   }
 
-  // Show MongoDB connection error
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="text-center py-12">
-          <Database className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">MongoDB Connection Error</h2>
-          <p className="text-gray-600 mb-6">
-            Unable to connect to MongoDB for activities data.
-          </p>
-          <Button onClick={handleRefresh} className="mr-4">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Retry Connection
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Activities</h3>
+          <p className="text-gray-500 mb-4">Failed to load activities from MongoDB</p>
+          <Button onClick={handleRefresh} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
           </Button>
         </div>
       </div>
@@ -270,105 +271,195 @@ const RecentActivities = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-4 md:py-6 pb-20 md:pb-6">
-      <div className="flex justify-between items-center mb-4 md:mb-6">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800">Recent Activities</h1>
-          <div className="flex items-center gap-2 mt-2">
-            <div className="flex items-center gap-1 text-green-600">
-              <Wifi className="h-4 w-4" />
-              <span className="text-sm">Connected to MongoDB</span>
-            </div>
-            <div className="flex items-center gap-1 text-blue-600">
-              <Database className="h-4 w-4" />
-              <span className="text-sm">Real-time sync {wsConnected ? 'enabled' : 'disabled'}</span>
-            </div>
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900">Recent Activities</h1>
+          <p className="text-gray-500">
+            Real-time activity monitoring from MongoDB
+            {wsConnected && (
+              <span className="inline-flex items-center gap-1 ml-2">
+                <Wifi className="h-4 w-4 text-green-500" />
+                <span className="text-green-600 text-sm">Live</span>
+              </span>
+            )}
+          </p>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex items-center gap-2">
           <Button
-            variant={showAnalytics ? "default" : "outline"}
+            variant="outline"
             onClick={() => setShowAnalytics(!showAnalytics)}
-            size="sm"
+            className="flex items-center gap-2"
           >
-            <TrendingUp className="mr-2 h-4 w-4" />
-            {showAnalytics ? 'Hide Analytics' : 'Show Analytics'}
+            <BarChart3 className="h-4 w-4" />
+            Analytics
           </Button>
           <Button
-            variant={showManager ? "default" : "outline"}
+            variant="outline"
             onClick={() => setShowManager(!showManager)}
-            size="sm"
+            className="flex items-center gap-2"
           >
-            <Settings className="mr-2 h-4 w-4" />
-            {showManager ? 'Hide Manager' : 'Show Manager'}
+            <Settings className="h-4 w-4" />
+            Manage
           </Button>
-          <Button onClick={handleExportActivities} variant="outline" size="sm">
-            <Download className="mr-2 h-4 w-4" />
+          <Button
+            variant="outline"
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className="flex items-center gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Advanced
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExportActivities}
+            className="flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
             Export
           </Button>
-          <Button onClick={handleRefresh} variant="outline" size="sm" disabled={isLoading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          <Button
+            onClick={handleRefresh}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
-          {process.env.NODE_ENV === 'development' && (
-            <div className="text-xs text-gray-500 flex items-center">
-              Render: {renderTime}ms
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Show Analytics, Manager, or Activities */}
-      {showAnalytics ? (
-        <ActivityAnalytics activities={filteredActivities} />
-      ) : showManager ? (
-        <ActivityManager 
+      {/* Analytics View */}
+      {showAnalytics && (
+        <ActivityAnalytics 
+          data={statsData}
+          timeframe="7d"
+        />
+      )}
+
+      {/* Advanced Filters */}
+      {showAdvancedFilters && (
+        <AdvancedActivityFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          onReset={handleResetFilters}
+          availableFilters={filtersData?.filters || {}}
+        />
+      )}
+
+      {/* Basic Filters */}
+      {!showAdvancedFilters && (
+        <ActivityFilters
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onResetFilters={handleResetFilters}
+          availableFilters={filtersData?.filters || {}}
+        />
+      )}
+
+      {/* Activity Tabs */}
+      <ActivityTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        activityCounts={activityCounts}
+      />
+
+      {/* Stats Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Activities</p>
+                <p className="text-2xl font-bold text-blue-600">{activities.length}</p>
+              </div>
+              <Database className="h-8 w-8 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Success Rate</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {activities.length > 0 ? 
+                    Math.round((activities.filter(a => a.isSuccessful).length / activities.length) * 100) 
+                    : 100}%
+                </p>
+              </div>
+              <ShieldCheck className="h-8 w-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Active Users</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {new Set(activities.map(a => a.userId)).size}
+                </p>
+              </div>
+              <Users className="h-8 w-8 text-purple-500" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Recent Errors</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {activities.filter(a => !a.isSuccessful).length}
+                </p>
+              </div>
+              <AlertCircle className="h-8 w-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Activity Manager */}
+      {showManager && (
+        <ActivityManager
           activities={filteredActivities}
-          onUpdate={handleRefresh}
+          onUpdate={handleUpdateActivities}
           selectedIds={selectedActivityIds}
           onSelectionChange={setSelectedActivityIds}
         />
-      ) : (
-        <>
-          <AdvancedActivityFilters 
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            dateFilter={dateFilter}
-            setDateFilter={setDateFilter}
-            typeFilter={typeFilter}
-            setTypeFilter={setTypeFilter}
-            agentFilter={agentFilter}
-            setAgentFilter={setAgentFilter}
-            uniqueAgents={uniqueAgents}
-            handleResetFilters={handleResetFilters}
-          />
-
-          <ActivityTabs activeTab={activeTab} setActiveTab={setActiveTab} />
-
-          {isMobile ? (
-            <ActivitiesMobileView 
-              activities={filteredActivities} 
-              loading={isLoading} 
-            />
-          ) : (
-            <ActivitiesDesktopView 
-              activities={filteredActivities} 
-              loading={isLoading} 
-              getActivityIcon={getActivityIcon} 
-              formatDate={formatDate} 
-            />
-          )}
-        </>
       )}
 
-      {/* Real-time Data Footer */}
-      <div className="text-center text-sm text-gray-500 py-4 border-t mt-6">
-        Connected to MongoDB • {filteredActivities.length} activities • 
-        Real-time sync {wsConnected ? 'enabled' : 'disabled'} • 
-        Last updated: {new Date().toLocaleTimeString()}
-      </div>
+      {/* Activities List */}
+      {isMobile ? (
+        <ActivitiesMobileView
+          activities={filteredActivities}
+          loading={isLoading}
+          onView={handleViewActivity}
+        />
+      ) : (
+        <ActivitiesDesktopView
+          activities={filteredActivities}
+          loading={isLoading}
+          getActivityIcon={getActivityIcon}
+          formatDate={formatDate}
+          onView={handleViewActivity}
+        />
+      )}
+
+      {/* Activity View Modal */}
+      <ActivityViewModal
+        activity={selectedActivity}
+        isOpen={showActivityModal}
+        onClose={() => setShowActivityModal(false)}
+      />
     </div>
   );
 };
 
-export default React.memo(RecentActivities);
+export default RecentActivities;

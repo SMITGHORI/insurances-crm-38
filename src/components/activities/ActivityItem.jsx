@@ -1,18 +1,22 @@
 
 import React from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
   Users, 
   FileText, 
   AlertTriangle, 
-  Quote,
-  TrendingUp,
+  Quote, 
+  TrendingUp, 
   User,
-  Activity as ActivityIcon
+  Clock,
+  MoreHorizontal,
+  Eye
 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
-const ActivityItem = ({ activity }) => {
+const ActivityItem = ({ activity, onView, onSelect, selected }) => {
   const getActivityIcon = (type) => {
     switch (type) {
       case 'client': return <Users className="h-4 w-4 text-blue-500" />;
@@ -20,8 +24,7 @@ const ActivityItem = ({ activity }) => {
       case 'claim': return <AlertTriangle className="h-4 w-4 text-orange-500" />;
       case 'quotation': return <Quote className="h-4 w-4 text-purple-500" />;
       case 'lead': return <TrendingUp className="h-4 w-4 text-indigo-500" />;
-      case 'user': return <User className="h-4 w-4 text-gray-500" />;
-      default: return <ActivityIcon className="h-4 w-4 text-gray-500" />;
+      default: return <User className="h-4 w-4 text-gray-500" />;
     }
   };
 
@@ -35,23 +38,18 @@ const ActivityItem = ({ activity }) => {
     }
   };
 
-  const formatTimeAgo = (dateString) => {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `${diffInDays}d ago`;
+  const getSeverityColor = (severity) => {
+    switch (severity) {
+      case 'critical': return 'border-l-red-500';
+      case 'high': return 'border-l-orange-500';
+      case 'medium': return 'border-l-yellow-500';
+      case 'low': return 'border-l-green-500';
+      default: return 'border-l-gray-300';
+    }
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className={`border-l-4 ${getSeverityColor(activity.severity)} hover:shadow-md transition-shadow ${selected ? 'ring-2 ring-primary' : ''}`}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3 flex-1">
@@ -59,34 +57,69 @@ const ActivityItem = ({ activity }) => {
               {getActivityIcon(activity.type)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {activity.description || activity.action}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h4 className="font-medium text-sm text-gray-900 truncate">
+                  {activity.description || activity.action}
+                </h4>
                 <Badge 
                   className={`text-xs ${getOperationColor(activity.operation)}`}
                   variant="secondary"
                 >
                   {activity.operation}
                 </Badge>
-                <span className="text-xs text-gray-500">
-                  by {activity.userName}
-                </span>
               </div>
-              {activity.entityName && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {activity.entityType}: {activity.entityName}
+              
+              <div className="space-y-1">
+                <p className="text-xs text-gray-600">
+                  <span className="font-medium">{activity.entityType}:</span> {activity.entityName}
                 </p>
-              )}
-              {activity.details && (
-                <p className="text-xs text-gray-400 mt-1 truncate">
-                  {activity.details}
+                <p className="text-xs text-gray-500">
+                  by <span className="font-medium">{activity.userName}</span>
+                  {activity.userRole && (
+                    <span className="ml-1 text-gray-400">({activity.userRole})</span>
+                  )}
                 </p>
-              )}
+                {activity.details && (
+                  <p className="text-xs text-gray-500 truncate">
+                    {activity.details}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <Clock className="h-3 w-3" />
+                  {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  {activity.tags?.map(tag => (
+                    <Badge key={tag} variant="outline" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-          <div className="text-xs text-gray-500 ml-2">
-            {formatTimeAgo(activity.createdAt)}
+          
+          <div className="flex items-center gap-1 ml-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onView?.(activity)}
+              className="h-8 w-8 p-0"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onSelect?.(activity)}
+              className="h-8 w-8 p-0"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </CardContent>

@@ -12,131 +12,147 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  LineChart,
+  Line,
+  Area,
+  AreaChart
 } from 'recharts';
-import { TrendingUp, Activity, Users, Clock } from 'lucide-react';
+import { 
+  TrendingUp, 
+  TrendingDown, 
+  Activity, 
+  Users, 
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Target
+} from 'lucide-react';
 
-const ActivityAnalytics = ({ activities = [] }) => {
-  // Process data for charts
-  const activityTypeData = activities.reduce((acc, activity) => {
-    acc[activity.type] = (acc[activity.type] || 0) + 1;
-    return acc;
-  }, {});
+const ActivityAnalytics = ({ data, timeframe = '7d' }) => {
+  const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff00'];
 
-  const typeChartData = Object.entries(activityTypeData).map(([type, count]) => ({
-    type: type.charAt(0).toUpperCase() + type.slice(1),
-    count
-  }));
+  const stats = data?.stats || {
+    total: 0,
+    successful: 0,
+    errors: 0,
+    successRate: 100,
+    byType: [],
+    byUser: [],
+    trends: []
+  };
 
-  const agentActivityData = activities.reduce((acc, activity) => {
-    if (activity.agent) {
-      acc[activity.agent] = (acc[activity.agent] || 0) + 1;
+  const chartData = data?.chartData || [];
+  const typeDistribution = data?.typeDistribution || [];
+  const userActivity = data?.userActivity || [];
+  const timeSeriesData = data?.timeSeriesData || [];
+
+  const StatCard = ({ title, value, change, icon: Icon, trend, color = "blue" }) => (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-600">{title}</p>
+            <p className={`text-2xl font-bold text-${color}-600`}>{value}</p>
+            {change !== undefined && (
+              <div className="flex items-center mt-1">
+                {trend === 'up' ? (
+                  <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                ) : (
+                  <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                )}
+                <span className={`text-sm ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+                  {Math.abs(change)}%
+                </span>
+              </div>
+            )}
+          </div>
+          <div className={`p-3 bg-${color}-100 rounded-full`}>
+            <Icon className={`h-6 w-6 text-${color}-600`} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderCustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border rounded shadow-lg">
+          <p className="font-medium">{label}</p>
+          {payload.map((entry, index) => (
+            <p key={index} style={{ color: entry.color }}>
+              {entry.dataKey}: {entry.value}
+            </p>
+          ))}
+        </div>
+      );
     }
-    return acc;
-  }, {});
-
-  const agentChartData = Object.entries(agentActivityData)
-    .slice(0, 10) // Top 10 agents
-    .map(([agent, count]) => ({
-      agent: agent.split(' ')[0], // First name only for chart
-      count
-    }));
-
-  // Daily activity data (last 7 days)
-  const last7Days = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
-    
-    const dayActivities = activities.filter(activity => {
-      const activityDate = new Date(activity.time || activity.createdAt).toISOString().split('T')[0];
-      return activityDate === dateStr;
-    });
-
-    last7Days.push({
-      date: date.toLocaleDateString('en-US', { weekday: 'short' }),
-      count: dayActivities.length
-    });
-  }
-
-  const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];
+    return null;
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold">Activity Analytics</h3>
-        <p className="text-sm text-gray-600">Comprehensive analysis of system activities</p>
-      </div>
-
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-2 mb-2">
-              <Activity className="h-5 w-5 text-blue-500" />
-              <span className="text-sm font-medium text-gray-600">Total Activities</span>
-            </div>
-            <div className="text-2xl font-bold text-blue-600">{activities.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-2 mb-2">
-              <Users className="h-5 w-5 text-green-500" />
-              <span className="text-sm font-medium text-gray-600">Active Agents</span>
-            </div>
-            <div className="text-2xl font-bold text-green-600">
-              {Object.keys(agentActivityData).length}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-2 mb-2">
-              <TrendingUp className="h-5 w-5 text-purple-500" />
-              <span className="text-sm font-medium text-gray-600">Most Active Type</span>
-            </div>
-            <div className="text-lg font-bold text-purple-600">
-              {typeChartData.length > 0 ? 
-                typeChartData.reduce((max, item) => item.count > max.count ? item : max).type : 
-                'N/A'
-              }
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-2 mb-2">
-              <Clock className="h-5 w-5 text-orange-500" />
-              <span className="text-sm font-medium text-gray-600">Today's Activities</span>
-            </div>
-            <div className="text-2xl font-bold text-orange-600">
-              {last7Days[last7Days.length - 1]?.count || 0}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Total Activities"
+          value={stats.total.toLocaleString()}
+          change={12}
+          trend="up"
+          icon={Activity}
+          color="blue"
+        />
+        <StatCard
+          title="Success Rate"
+          value={`${stats.successRate.toFixed(1)}%`}
+          change={2.5}
+          trend="up"
+          icon={CheckCircle}
+          color="green"
+        />
+        <StatCard
+          title="Active Users"
+          value={stats.byUser?.length || 0}
+          change={-5}
+          trend="down"
+          icon={Users}
+          color="purple"
+        />
+        <StatCard
+          title="Error Rate"
+          value={`${((stats.errors / stats.total) * 100 || 0).toFixed(1)}%`}
+          change={-8}
+          trend="down"
+          icon={AlertTriangle}
+          color="red"
+        />
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Daily Activity Trend */}
+        {/* Activity Trends */}
         <Card>
           <CardHeader>
-            <CardTitle>Daily Activity Trend (Last 7 Days)</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Activity Trends
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={last7Days}>
+              <AreaChart data={timeSeriesData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
-                <Tooltip />
-                <Bar dataKey="count" fill="#3B82F6" />
-              </BarChart>
+                <Tooltip content={renderCustomTooltip} />
+                <Area
+                  type="monotone"
+                  dataKey="activities"
+                  stroke="#8884d8"
+                  fill="#8884d8"
+                  fillOpacity={0.6}
+                />
+              </AreaChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
@@ -144,22 +160,25 @@ const ActivityAnalytics = ({ activities = [] }) => {
         {/* Activity Types Distribution */}
         <Card>
           <CardHeader>
-            <CardTitle>Activity Types Distribution</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Activity Types
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={typeChartData}
+                  data={typeDistribution}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ type, percent }) => `${type} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
-                  dataKey="count"
+                  dataKey="value"
                 >
-                  {typeChartData.map((entry, index) => (
+                  {typeDistribution.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -168,52 +187,98 @@ const ActivityAnalytics = ({ activities = [] }) => {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Top Agents Activity */}
-      {agentChartData.length > 0 && (
+        {/* Operations Breakdown */}
         <Card>
           <CardHeader>
-            <CardTitle>Top Agents by Activity</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Operations Breakdown
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={agentChartData}>
+              <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="agent" />
+                <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip />
-                <Bar dataKey="count" fill="#10B981" />
+                <Tooltip content={renderCustomTooltip} />
+                <Bar dataKey="create" fill="#22c55e" />
+                <Bar dataKey="update" fill="#3b82f6" />
+                <Bar dataKey="delete" fill="#ef4444" />
+                <Bar dataKey="read" fill="#6b7280" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-      )}
 
-      {/* Activity Type Breakdown */}
+        {/* User Activity */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Top Active Users
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {userActivity.slice(0, 5).map((user, index) => (
+                <div key={user.userId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-medium text-blue-600">
+                        {index + 1}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{user.userName}</p>
+                      <p className="text-xs text-gray-500">{user.role}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">
+                      {user.activityCount} activities
+                    </Badge>
+                    <div className="w-16 h-2 bg-gray-200 rounded-full">
+                      <div 
+                        className="h-full bg-blue-500 rounded-full"
+                        style={{ 
+                          width: `${(user.activityCount / Math.max(...userActivity.map(u => u.activityCount))) * 100}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Activity Summary */}
       <Card>
         <CardHeader>
-          <CardTitle>Activity Breakdown by Type</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Recent Activity Summary
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {typeChartData.map((item, index) => (
-              <div key={item.type} className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div 
-                    className="w-4 h-4 rounded-full" 
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  ></div>
-                  <span className="font-medium">{item.type}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">{item.count} activities</span>
-                  <Badge variant="secondary">
-                    {((item.count / activities.length) * 100).toFixed(1)}%
-                  </Badge>
-                </div>
-              </div>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <p className="text-2xl font-bold text-green-600">{stats.successful}</p>
+              <p className="text-sm text-gray-600">Successful Operations</p>
+            </div>
+            <div className="text-center p-4 bg-red-50 rounded-lg">
+              <p className="text-2xl font-bold text-red-600">{stats.errors}</p>
+              <p className="text-sm text-gray-600">Failed Operations</p>
+            </div>
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <p className="text-2xl font-bold text-blue-600">
+                {Math.round(stats.total / (timeframe === '24h' ? 24 : timeframe === '7d' ? 7 : 30))}
+              </p>
+              <p className="text-sm text-gray-600">Avg. per {timeframe === '24h' ? 'Hour' : 'Day'}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
