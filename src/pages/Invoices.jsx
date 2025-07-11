@@ -1,15 +1,18 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import InvoicesTable from '@/components/invoices/InvoicesTable';
 import InvoiceFilters from '@/components/invoices/InvoiceFilters';
+import InvoiceStatsCards from '@/components/invoices/InvoiceStatsCards';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import PaymentReminderManager from '@/components/invoices/PaymentReminderManager';
+import { useInvoicesBackend } from '@/hooks/useInvoicesBackend';
 
 const Invoices = () => {
   const navigate = useNavigate();
@@ -18,21 +21,19 @@ const Invoices = () => {
     status: 'all',
     dateRange: 'all',
     clientId: 'all',
-    searchTerm: ''
+    searchTerm: '',
+    page: 1,
+    limit: 50
   });
   const [sortConfig, setSortConfig] = useState({
-    key: 'createdDate',
+    key: 'issueDate',
     direction: 'desc'
   });
   const [activeFilters, setActiveFilters] = useState({});
   const [activeTab, setActiveTab] = useState('all');
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Simulate loading for demonstration
-  React.useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1000);
-    return () => clearTimeout(timer);
-  }, []);
+  // Use backend hooks for data fetching
+  const { data: invoicesData, isLoading, error } = useInvoicesBackend(filterParams);
 
   const handleCreateInvoice = () => {
     navigate('/invoices/create');
@@ -43,11 +44,18 @@ const Invoices = () => {
       key,
       direction: prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc',
     }));
+    
+    // Update filter params to include sorting
+    setFilterParams(prev => ({
+      ...prev,
+      sortBy: key,
+      sortOrder: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc'
+    }));
   };
   
   const updateActiveFilters = (filterName, value) => {
     setActiveFilters(prev => {
-      if (!value) {
+      if (!value || value === 'all') {
         const newFilters = { ...prev };
         delete newFilters[filterName];
         return newFilters;
@@ -62,7 +70,9 @@ const Invoices = () => {
       status: 'all',
       dateRange: 'all',
       clientId: 'all',
-      searchTerm: ''
+      searchTerm: '',
+      page: 1,
+      limit: 50
     });
     setActiveFilters({});
   };
@@ -72,9 +82,45 @@ const Invoices = () => {
     toast.success(`Exported ${invoices.length} invoices to CSV`);
   };
 
+  const handleFilterChange = (newFilters) => {
+    setFilterParams(prev => ({
+      ...prev,
+      ...newFilters,
+      page: 1 // Reset to first page when filters change
+    }));
+  };
+
+  const handlePageChange = (page) => {
+    setFilterParams(prev => ({
+      ...prev,
+      page
+    }));
+  };
+
   // Show professional loading skeleton
   if (isLoading) {
     return <PageSkeleton isMobile={isMobile} />;
+  }
+
+  // Handle error state
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <Card className="p-6">
+          <div className="text-center text-red-600">
+            <h2 className="text-lg font-semibold mb-2">Error Loading Invoices</h2>
+            <p className="text-sm">{error.message}</p>
+            <Button 
+              onClick={() => window.location.reload()} 
+              className="mt-4"
+              variant="outline"
+            >
+              Retry
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -87,11 +133,14 @@ const Invoices = () => {
             Manage and track all your invoices
           </p>
         </div>
-        <Button onClick={() => navigate('/invoices/create')}>
+        <Button onClick={handleCreateInvoice}>
           <Plus className="mr-2 h-4 w-4" />
           Create Invoice
         </Button>
       </div>
+
+      {/* Statistics Cards */}
+      <InvoiceStatsCards filterParams={filterParams} />
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -106,7 +155,7 @@ const Invoices = () => {
           <Card className="mb-4 sm:mb-6 border-0 shadow-sm">
             <InvoiceFilters 
               filterParams={filterParams} 
-              setFilterParams={setFilterParams}
+              setFilterParams={handleFilterChange}
               activeFilters={activeFilters}
               updateActiveFilters={updateActiveFilters}
               clearAllFilters={clearAllFilters}
@@ -115,20 +164,63 @@ const Invoices = () => {
           
           <div className="max-w-full overflow-x-hidden mb-20 sm:mb-0">
             <InvoicesTable 
+              invoicesData={invoicesData}
               filterParams={filterParams} 
               sortConfig={sortConfig}
               handleSort={handleSort}
               handleExport={handleExportInvoices}
+              onPageChange={handlePageChange}
+              isLoading={isLoading}
             />
           </div>
         </TabsContent>
 
         <TabsContent value="draft" className="space-y-4">
-          {/* Draft invoices */}
+          <Card className="mb-4 sm:mb-6 border-0 shadow-sm">
+            <InvoiceFilters 
+              filterParams={{...filterParams, status: 'draft'}} 
+              setFilterParams={handleFilterChange}
+              activeFilters={activeFilters}
+              updateActiveFilters={updateActiveFilters}
+              clearAllFilters={clearAllFilters}
+            />
+          </Card>
+          
+          <div className="max-w-full overflow-x-hidden mb-20 sm:mb-0">
+            <InvoicesTable 
+              invoicesData={invoicesData}
+              filterParams={{...filterParams, status: 'draft'}} 
+              sortConfig={sortConfig}
+              handleSort={handleSort}
+              handleExport={handleExportInvoices}
+              onPageChange={handlePageChange}
+              isLoading={isLoading}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="sent" className="space-y-4">
-          {/* Sent invoices */}
+          <Card className="mb-4 sm:mb-6 border-0 shadow-sm">
+            <InvoiceFilters 
+              filterParams={{...filterParams, status: 'sent'}} 
+              setFilterParams={handleFilterChange}
+              activeFilters={activeFilters}
+              updateActiveFilters={updateActiveFilters}
+              clearAllFilters={clearAllFilters}
+            />
+          </Card>
+          
+          <div className="max-w-full overflow-x-hidden mb-20 sm:mb-0">
+            <InvoicesTable 
+              invoicesData={invoicesData}
+              filterParams={{...filterParams, status: 'sent'}} 
+              sortConfig={sortConfig}
+              handleSort={handleSort}
+              handleExport={handleExportInvoices}
+              onPageChange={handlePageChange}
+              isLoading={isLoading}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="reminders" className="space-y-4">

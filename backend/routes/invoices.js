@@ -8,7 +8,11 @@ const {
   updateInvoice,
   deleteInvoice,
   getInvoiceStats,
-  sendInvoice
+  sendInvoice,
+  markInvoiceAsPaid,
+  getOverdueInvoices,
+  bulkUpdateInvoices,
+  exportInvoices
 } = require('../controllers/invoiceController');
 const {
   createInvoiceValidation,
@@ -34,6 +38,25 @@ router.get('/',
 router.get('/stats', 
   roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
   getInvoiceStats
+);
+
+// GET /api/invoices/overdue - Get overdue invoices
+router.get('/overdue', 
+  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
+  getOverdueInvoices
+);
+
+// GET /api/invoices/export - Export invoices
+router.get('/export', 
+  roleMiddleware(['manager', 'admin', 'super_admin']),
+  queryValidation,
+  exportInvoices
+);
+
+// PUT /api/invoices/bulk-update - Bulk update invoices
+router.put('/bulk-update', 
+  roleMiddleware(['manager', 'admin', 'super_admin']),
+  bulkUpdateInvoices
 );
 
 // GET /api/invoices/:id - Get single invoice
@@ -69,6 +92,13 @@ router.post('/:id/send',
   roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
   sendInvoiceValidation, 
   sendInvoice
+);
+
+// POST /api/invoices/:id/mark-paid - Mark invoice as paid
+router.post('/:id/mark-paid', 
+  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
+  getInvoiceValidation,
+  markInvoiceAsPaid
 );
 
 module.exports = router;

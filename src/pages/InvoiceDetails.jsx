@@ -16,12 +16,23 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import InvoicePreview from '@/components/invoices/InvoicePreview';
 import InvoiceHistory from '@/components/invoices/InvoiceHistory';
+import InvoiceOverview from '@/components/invoices/details/InvoiceOverview';
+import InvoiceSend from '@/components/invoices/details/InvoiceSend';
+import InvoiceAnalytics from '@/components/invoices/details/InvoiceAnalytics';
+import InvoiceNotes from '@/components/invoices/details/InvoiceNotes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
-import { useInvoice, useUpdateInvoice, useDeleteInvoice } from '@/hooks/useInvoices';
+import { 
+  useInvoiceBackend, 
+  useUpdateInvoiceBackend, 
+  useDeleteInvoiceBackend,
+  useSendInvoiceBackend,
+  useInvoicesBackend
+} from '@/hooks/useInvoicesBackend';
 
 const InvoiceDetails = () => {
   const { id } = useParams();
@@ -29,12 +40,18 @@ const InvoiceDetails = () => {
   const { isSuperAdmin } = useAuth();
   const isMobile = useIsMobile();
   const [showSharePopup, setShowSharePopup] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
   const downloadRef = useRef();
   const printRef = useRef();
 
-  const { data: invoice, isLoading: loading, error, isError } = useInvoice(id);
-  const updateInvoiceMutation = useUpdateInvoice();
-  const deleteInvoiceMutation = useDeleteInvoice();
+  const { data: invoiceResponse, isLoading: loading, error, isError } = useInvoiceBackend(id);
+  const { data: relatedInvoicesResponse } = useInvoicesBackend({ clientId: invoiceResponse?.data?.clientId });
+  const updateInvoiceMutation = useUpdateInvoiceBackend();
+  const deleteInvoiceMutation = useDeleteInvoiceBackend();
+  const sendInvoiceMutation = useSendInvoiceBackend();
+
+  const invoice = invoiceResponse?.data;
+  const relatedInvoices = relatedInvoicesResponse?.data || [];
 
   useEffect(() => {
     if (isError) {
@@ -81,6 +98,23 @@ const InvoiceDetails = () => {
           isDuplicate: true 
         } 
       });
+    }
+  };
+
+  const handleSendInvoice = async (invoiceData) => {
+    try {
+      await sendInvoiceMutation.mutateAsync({
+        invoiceId: invoiceData.id || invoiceData._id,
+        emailData: {
+          to: invoiceData.clientEmail,
+          subject: `Invoice ${invoiceData.invoiceNumber}`,
+          message: `Please find your invoice ${invoiceData.invoiceNumber} attached.`
+        }
+      });
+      toast.success('Invoice sent successfully!');
+    } catch (error) {
+      console.error('Error sending invoice:', error);
+      toast.error('Failed to send invoice');
     }
   };
 
@@ -158,7 +192,18 @@ ${invoice.clientEmail}`;
   }
 
   if (!invoice) {
-    return <div className="text-center">Invoice not found</div>;
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <Card className="p-6">
+          <div className="text-center">
+            <h2 className="text-lg font-semibold mb-2">Invoice not found</h2>
+            <Button onClick={() => navigate('/invoices')} variant="outline">
+              Back to Invoices
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -209,108 +254,99 @@ ${invoice.clientEmail}`;
         </div>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+      {/* Tabs for different views */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="send">Send</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="preview">Preview</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <InvoiceOverview 
+                invoice={invoice} 
+                onStatusUpdate={updateInvoiceMutation.mutateAsync}
+                onSendInvoice={handleSendInvoice}
+              />
+            </div>
+            
+            <div className="space-y-6">
+              <Card>
+                <CardContent className="p-6">
+                  <h3 className="text-lg font-semibold mb-4">Invoice Actions</h3>
+                  <div className="space-y-4">
+                    {isSuperAdmin() && (
+                      <>
+                        <Button 
+                          className="w-full justify-start"
+                          onClick={handleEditInvoice}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit Invoice
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={handleDuplicateInvoice}
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          Duplicate
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          className="w-full justify-start"
+                          onClick={handleDeleteInvoice}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Invoice
+                        </Button>
+                      </>
+                    )}
+                    {!isSuperAdmin() && (
+                      <div className="text-center py-4 text-gray-500">
+                        <p className="text-sm">Only Super Admins can edit, duplicate, or delete invoices.</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {invoice.history && (
+                <Card>
+                  <CardContent className="p-6">
+                    <h3 className="text-lg font-semibold mb-4">Invoice History</h3>
+                    <InvoiceHistory history={invoice.history} />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="send" className="mt-6">
+          <InvoiceSend invoice={invoice} />
+        </TabsContent>
+
+        <TabsContent value="analytics" className="mt-6">
+          <InvoiceAnalytics invoice={invoice} relatedInvoices={relatedInvoices} />
+        </TabsContent>
+
+        <TabsContent value="notes" className="mt-6">
+          <InvoiceNotes invoice={invoice} />
+        </TabsContent>
+
+        <TabsContent value="preview" className="mt-6">
           <InvoicePreview 
             invoice={invoice} 
             onDownload={downloadRef}
             onPrint={printRef}
           />
-        </div>
-        
-        <div className="space-y-6">
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Invoice Actions</h3>
-              <div className="space-y-4">
-                {isSuperAdmin() && (
-                  <>
-                    <Button 
-                      className="w-full justify-start"
-                      onClick={handleEditInvoice}
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit Invoice
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="w-full justify-start"
-                      onClick={handleDuplicateInvoice}
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Duplicate
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      className="w-full justify-start"
-                      onClick={handleDeleteInvoice}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete Invoice
-                    </Button>
-                  </>
-                )}
-                {!isSuperAdmin() && (
-                  <div className="text-center py-4 text-gray-500">
-                    <p className="text-sm">Only Super Admins can edit, duplicate, or delete invoices.</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Client Details</h3>
-              <div className="space-y-2">
-                <p className="font-medium text-gray-900">{invoice.clientName}</p>
-                <p className="text-gray-700">{invoice.clientEmail}</p>
-                <p className="text-gray-700">{invoice.clientPhone}</p>
-                <p className="text-gray-700">{invoice.clientAddress}</p>
-                {invoice.customFields?.["GST Number"] && (
-                  <p className="text-gray-700">GST: {invoice.customFields["GST Number"]}</p>
-                )}
-                <Button 
-                  variant="link" 
-                  className="p-0 h-auto text-primary"
-                  onClick={() => navigate(`/clients/${invoice.clientId}`)}
-                >
-                  View Client Profile
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {invoice.policyNumber && (
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Policy Details</h3>
-                <div className="space-y-2">
-                  <p className="font-medium text-gray-900">Policy: {invoice.policyNumber}</p>
-                  <p className="text-gray-700">Type: {invoice.insuranceType}</p>
-                  <p className="text-gray-700">Period: {invoice.premiumPeriod}</p>
-                  <Button 
-                    variant="link" 
-                    className="p-0 h-auto text-primary"
-                    onClick={() => invoice.policyId && navigate(`/policies/${invoice.policyId}`)}
-                  >
-                    View Policy
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {invoice.history && (
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Invoice History</h3>
-                <InvoiceHistory history={invoice.history} />
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Share Popup */}
       {showSharePopup && (
