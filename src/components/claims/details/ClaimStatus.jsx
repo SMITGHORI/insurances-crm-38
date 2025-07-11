@@ -2,145 +2,169 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  AlertTriangle, 
+  DollarSign,
+  FileText
+} from 'lucide-react';
 import { toast } from 'sonner';
+import ClaimStatusBadge from '../ClaimStatusBadge';
+import claimsBackendApi from '../../../services/api/claimsApiBackend';
 
 const ClaimStatus = ({ claimId }) => {
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const [currentStatus, setCurrentStatus] = useState('');
   const [reason, setReason] = useState('');
   const [approvedAmount, setApprovedAmount] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const statusOptions = [
-    { value: 'Reported', label: 'Reported', icon: AlertCircle, color: 'blue' },
-    { value: 'Under Review', label: 'Under Review', icon: Clock, color: 'yellow' },
-    { value: 'Pending', label: 'Pending', icon: Clock, color: 'orange' },
-    { value: 'Approved', label: 'Approved', icon: CheckCircle, color: 'green' },
-    { value: 'Rejected', label: 'Rejected', icon: XCircle, color: 'red' },
-    { value: 'Settled', label: 'Settled', icon: CheckCircle, color: 'purple' },
-    { value: 'Closed', label: 'Closed', icon: CheckCircle, color: 'gray' }
+    { value: 'Reported', label: 'Reported', icon: FileText, color: 'bg-blue-100 text-blue-800' },
+    { value: 'Under Review', label: 'Under Review', icon: Clock, color: 'bg-yellow-100 text-yellow-800' },
+    { value: 'Pending', label: 'Pending', icon: AlertTriangle, color: 'bg-orange-100 text-orange-800' },
+    { value: 'Approved', label: 'Approved', icon: CheckCircle, color: 'bg-green-100 text-green-800' },
+    { value: 'Rejected', label: 'Rejected', icon: XCircle, color: 'bg-red-100 text-red-800' },
+    { value: 'Settled', label: 'Settled', icon: DollarSign, color: 'bg-emerald-100 text-emerald-800' },
+    { value: 'Closed', label: 'Closed', icon: CheckCircle, color: 'bg-gray-100 text-gray-800' }
   ];
 
-  const getCurrentStatus = () => {
-    return statusOptions.find(status => status.value === 'Under Review') || statusOptions[0];
-  };
-
-  const getStatusBadge = (status) => {
-    const statusColors = {
-      'Reported': 'bg-blue-100 text-blue-800',
-      'Under Review': 'bg-yellow-100 text-yellow-800',
-      'Pending': 'bg-orange-100 text-orange-800',
-      'Approved': 'bg-green-100 text-green-800',
-      'Rejected': 'bg-red-100 text-red-800',
-      'Settled': 'bg-purple-100 text-purple-800',
-      'Closed': 'bg-gray-100 text-gray-800'
-    };
-    return <Badge className={statusColors[status] || 'bg-gray-100 text-gray-800'}>{status}</Badge>;
-  };
-
-  const handleStatusUpdate = () => {
-    if (!selectedStatus) {
+  const handleStatusUpdate = async () => {
+    if (!currentStatus) {
       toast.error('Please select a status');
       return;
     }
 
-    if (selectedStatus === 'Approved' && !approvedAmount) {
-      toast.error('Please enter approved amount');
+    if (currentStatus === 'Approved' && !approvedAmount) {
+      toast.error('Approved amount is required for approved claims');
       return;
     }
 
-    toast.success(`Claim status updated to ${selectedStatus}`);
-    setSelectedStatus('');
-    setReason('');
-    setApprovedAmount('');
+    setIsLoading(true);
+    try {
+      await claimsBackendApi.updateClaimStatus(
+        claimId, 
+        currentStatus, 
+        reason, 
+        approvedAmount ? parseFloat(approvedAmount) : undefined
+      );
+      
+      toast.success('Claim status updated successfully');
+      
+      // Reset form
+      setCurrentStatus('');
+      setReason('');
+      setApprovedAmount('');
+      
+      // Refresh the page or update parent component
+      window.location.reload();
+    } catch (error) {
+      console.error('Status update error:', error);
+      toast.error('Failed to update claim status');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const currentStatus = getCurrentStatus();
-  const StatusIcon = currentStatus.icon;
+  const getStatusIcon = (status) => {
+    const statusConfig = statusOptions.find(opt => opt.value === status);
+    if (!statusConfig) return Clock;
+    return statusConfig.icon;
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold">Claim Status Management</h3>
-        <p className="text-sm text-gray-600">Update and track claim status changes</p>
-      </div>
-
-      {/* Current Status */}
+      {/* Current Status Display */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <StatusIcon className="h-5 w-5" />
-            <span>Current Status</span>
-          </CardTitle>
+          <CardTitle>Current Status</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
-            <div>
-              {getStatusBadge(currentStatus.value)}
-              <p className="text-sm text-gray-600 mt-2">
-                Last updated on {new Date().toLocaleDateString()}
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Clock className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-medium">Status Information</p>
+                <p className="text-sm text-gray-500">Current claim processing status</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-600">Days in current status</p>
-              <p className="text-2xl font-bold">5</p>
-            </div>
+            <ClaimStatusBadge status="Under Review" />
           </div>
         </CardContent>
       </Card>
 
-      {/* Update Status */}
+      {/* Status Update Form */}
       <Card>
         <CardHeader>
           <CardTitle>Update Status</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">New Status</label>
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+          <div className="space-y-2">
+            <Label htmlFor="status">New Status *</Label>
+            <Select value={currentStatus} onValueChange={setCurrentStatus}>
               <SelectTrigger>
                 <SelectValue placeholder="Select new status" />
               </SelectTrigger>
               <SelectContent>
-                {statusOptions.map(status => (
-                  <SelectItem key={status.value} value={status.value}>
-                    <div className="flex items-center space-x-2">
-                      <status.icon className="h-4 w-4" />
-                      <span>{status.label}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {statusOptions.map((status) => {
+                  const IconComponent = status.icon;
+                  return (
+                    <SelectItem key={status.value} value={status.value}>
+                      <div className="flex items-center gap-2">
+                        <IconComponent className="h-4 w-4" />
+                        {status.label}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
 
-          {selectedStatus === 'Approved' && (
-            <div>
-              <label className="block text-sm font-medium mb-2">Approved Amount</label>
-              <input
-                type="number"
-                value={approvedAmount}
-                onChange={(e) => setApprovedAmount(e.target.value)}
-                placeholder="Enter approved amount"
-                className="w-full p-2 border border-gray-300 rounded-md"
-              />
+          {currentStatus === 'Approved' && (
+            <div className="space-y-2">
+              <Label htmlFor="approvedAmount">Approved Amount *</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                <Input
+                  id="approvedAmount"
+                  type="number"
+                  value={approvedAmount}
+                  onChange={(e) => setApprovedAmount(e.target.value)}
+                  placeholder="Enter approved amount"
+                  className="pl-10"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium mb-2">Reason (Optional)</label>
+          <div className="space-y-2">
+            <Label htmlFor="reason">Reason/Comments</Label>
             <Textarea
+              id="reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Enter reason for status change"
+              placeholder="Enter reason for status change (optional)"
               rows={3}
             />
           </div>
 
-          <Button onClick={handleStatusUpdate} className="w-full">
-            Update Status
+          <Button 
+            onClick={handleStatusUpdate}
+            disabled={isLoading || !currentStatus}
+            className="w-full"
+          >
+            {isLoading ? 'Updating...' : 'Update Status'}
           </Button>
         </CardContent>
       </Card>
@@ -152,21 +176,81 @@ const ClaimStatus = ({ claimId }) => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {[
-              { status: 'Under Review', date: '2024-01-18', reason: 'Initial review started' },
-              { status: 'Reported', date: '2024-01-15', reason: 'Claim reported by client' }
-            ].map((entry, index) => (
-              <div key={index} className="flex items-center justify-between py-2 border-b last:border-b-0">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <div>
-                    {getStatusBadge(entry.status)}
-                    <p className="text-sm text-gray-600 mt-1">{entry.reason}</p>
-                  </div>
-                </div>
-                <span className="text-sm text-gray-500">{entry.date}</span>
+            {/* Sample status history - in real implementation, this would come from API */}
+            <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+              <div className="p-2 bg-blue-100 rounded-full">
+                <FileText className="h-4 w-4 text-blue-600" />
               </div>
-            ))}
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium">Claim Reported</p>
+                  <Badge className="bg-blue-100 text-blue-800">Reported</Badge>
+                </div>
+                <p className="text-sm text-gray-500">Initial claim submission</p>
+                <p className="text-xs text-gray-500">2 days ago by System</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+              <div className="p-2 bg-yellow-100 rounded-full">
+                <Clock className="h-4 w-4 text-yellow-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium">Under Review</p>
+                  <Badge className="bg-yellow-100 text-yellow-800">Under Review</Badge>
+                </div>
+                <p className="text-sm text-gray-500">Claim assigned to agent for review</p>
+                <p className="text-xs text-gray-500">1 day ago by John Smith</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentStatus('Approved')}
+              className="flex items-center gap-2"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Approve
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentStatus('Rejected')}
+              className="flex items-center gap-2"
+            >
+              <XCircle className="h-4 w-4" />
+              Reject
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentStatus('Pending')}
+              className="flex items-center gap-2"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              Pend
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentStatus('Settled')}
+              className="flex items-center gap-2"
+            >
+              <DollarSign className="h-4 w-4" />
+              Settle
+            </Button>
           </div>
         </CardContent>
       </Card>
