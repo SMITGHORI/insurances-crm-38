@@ -11,7 +11,7 @@ const path = require('path');
 const passport = require('passport');
 const localStrategy = require('./middleware/passport');
 const authMiddleware = require('./middleware/auth');
-const errorHandler = require('./middleware/errorHandler');
+const { errorHandler } = require('./middleware/errorHandler');
 
 // Load environment variables
 require('dotenv').config();
@@ -58,7 +58,7 @@ passport.use(localStrategy);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Database connection
-const DB_URL = process.env.DATABASE_URL.replace('<PASSWORD>', process.env.DATABASE_PASSWORD);
+const DB_URL = process.env.MONGODB_URI;
 
 mongoose.connect(DB_URL, {
   useNewUrlParser: true,
@@ -78,9 +78,16 @@ app.use('/api/policies', require('./routes/policies'));
 app.use('/api/claims', require('./routes/claims'));
 app.use('/api/agents', require('./routes/agents'));
 app.use('/api/activities', require('./routes/activities'));
+app.use('/api/dashboard', require('./routes/dashboard'));
 
 // Error handling middleware
 app.use(errorHandler);
+
+// Start server
+const PORT = process.env.PORT || 5001;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
 
 // Export the app
 module.exports = app;

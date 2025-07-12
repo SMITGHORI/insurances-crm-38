@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const agentController = require('../controllers/agentController');
 const authMiddleware = require('../middleware/auth');
-const { roleMiddleware, resourceOwnershipMiddleware } = require('../middleware/roleMiddleware');
+const { roleMiddleware, ownershipMiddleware } = require('../middleware/roleMiddleware');
 const uploadMiddleware = require('../middleware/upload');
 const { validationMiddleware } = require('../middleware/validation');
 const { 
@@ -24,7 +24,7 @@ router.use(authMiddleware);
  */
 router.get('/', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   agentController.getAllAgents
 );
 
@@ -35,7 +35,7 @@ router.get('/',
  */
 router.get('/:id', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   agentController.getAgentById
 );
 
@@ -57,7 +57,7 @@ router.post('/',
  */
 router.put('/:id', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   validationMiddleware(updateAgentValidation),
   agentController.updateAgent
 );
@@ -79,7 +79,7 @@ router.delete('/:id',
  */
 router.post('/:id/documents', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   uploadMiddleware.single('document'),
   validationMiddleware(agentDocumentValidation),
   agentController.uploadDocument
@@ -92,7 +92,7 @@ router.post('/:id/documents',
  */
 router.get('/:id/documents', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   agentController.getAgentDocuments
 );
 
@@ -103,7 +103,7 @@ router.get('/:id/documents',
  */
 router.delete('/:id/documents/:documentId', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   agentController.deleteDocument
 );
 
@@ -114,7 +114,7 @@ router.delete('/:id/documents/:documentId',
  */
 router.get('/:id/clients', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   agentController.getAgentClients
 );
 
@@ -125,7 +125,7 @@ router.get('/:id/clients',
  */
 router.get('/:id/policies', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   agentController.getAgentPolicies
 );
 
@@ -136,7 +136,7 @@ router.get('/:id/policies',
  */
 router.get('/:id/commissions', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   agentController.getAgentCommissions
 );
 
@@ -147,7 +147,7 @@ router.get('/:id/commissions',
  */
 router.get('/:id/performance', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   agentController.getAgentPerformance
 );
 
@@ -169,7 +169,7 @@ router.put('/:id/targets',
  */
 router.post('/:id/notes', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   validationMiddleware(agentNoteValidation),
   agentController.addNote
 );
@@ -181,7 +181,7 @@ router.post('/:id/notes',
  */
 router.get('/:id/notes', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('id', '_id'),
+  ownershipMiddleware('_id'),
   agentController.getAgentNotes
 );
 

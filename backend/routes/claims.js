@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const claimController = require('../controllers/claimController');
 const authMiddleware = require('../middleware/auth');
-const { roleMiddleware, resourceOwnershipMiddleware } = require('../middleware/roleMiddleware');
+const { roleMiddleware, ownershipMiddleware } = require('../middleware/roleMiddleware');
 const uploadMiddleware = require('../middleware/upload');
 const { validationMiddleware } = require('../middleware/validation');
 const { 
@@ -31,20 +31,20 @@ router.get('/form-data/clients',
 
 router.get('/form-data/policy/:policyId', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('policyId', 'assignedAgentId'),
+  ownershipMiddleware('assignedTo'),
   claimController.getPolicyDetails
 );
 
 // Main CRUD operations
 router.get('/', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('assignedTo', 'assignedTo'),
+  ownershipMiddleware('assignedTo'),
   claimController.getAllClaims
 );
 
 router.get('/:id', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('assignedTo', 'assignedTo'),
+  ownershipMiddleware('assignedTo'),
   claimController.getClaimById
 );
 
@@ -56,7 +56,7 @@ router.post('/',
 
 router.put('/:id', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('assignedTo', 'assignedTo'),
+  ownershipMiddleware('assignedTo'),
   validationMiddleware(updateClaimValidation),
   claimController.updateClaim
 );
@@ -69,7 +69,7 @@ router.delete('/:id',
 // Document management
 router.post('/:id/documents', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('assignedTo', 'assignedTo'),
+  ownershipMiddleware('assignedTo'),
   uploadMiddleware.single('document'),
   validationMiddleware(claimDocumentValidation),
   claimController.uploadDocument
@@ -77,34 +77,34 @@ router.post('/:id/documents',
 
 router.get('/:id/documents', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('assignedTo', 'assignedTo'),
+  ownershipMiddleware('assignedTo'),
   claimController.getClaimDocuments
 );
 
 router.delete('/:id/documents/:documentId', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('assignedTo', 'assignedTo'),
+  ownershipMiddleware('assignedTo'),
   claimController.deleteDocument
 );
 
 // Status and workflow management
 router.put('/:id/status', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('assignedTo', 'assignedTo'),
+  ownershipMiddleware('assignedTo'),
   validationMiddleware(claimStatusValidation),
   claimController.updateClaimStatus
 );
 
 router.post('/:id/notes', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('assignedTo', 'assignedTo'),
+  ownershipMiddleware('assignedTo'),
   validationMiddleware(claimNoteValidation),
   claimController.addNote
 );
 
 router.get('/:id/notes', 
   roleMiddleware(['super_admin', 'manager', 'agent']),
-  resourceOwnershipMiddleware('assignedTo', 'assignedTo'),
+  ownershipMiddleware('assignedTo'),
   claimController.getClaimNotes
 );
 

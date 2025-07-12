@@ -4,7 +4,7 @@ const router = express.Router();
 
 // Import middleware
 const authMiddleware = require('../middleware/auth');
-const { roleMiddleware, resourceOwnershipMiddleware } = require('../middleware/roleMiddleware');
+const { roleMiddleware, ownershipMiddleware } = require('../middleware/roleMiddleware');
 const { validationMiddleware } = require('../middleware/validation');
 
 // Import validation schemas

@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const policyController = require('../controllers/policyController');
 const authMiddleware = require('../middleware/auth');
-const { roleMiddleware, resourceOwnershipMiddleware } = require('../middleware/roleMiddleware');
+const { roleMiddleware, ownershipMiddleware } = require('../middleware/roleMiddleware');
 const uploadMiddleware = require('../middleware/upload');
 const { validationMiddleware } = require('../middleware/validation');
 const { 
@@ -24,7 +24,7 @@ router.use(authMiddleware);
  */
 router.get('/', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   policyController.getAllPolicies
 );
 
@@ -35,7 +35,7 @@ router.get('/',
  */
 router.get('/:id', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   policyController.getPolicyById
 );
 
@@ -57,7 +57,7 @@ router.post('/',
  */
 router.put('/:id', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   validationMiddleware(updatePolicyValidation),
   policyController.updatePolicy
 );
@@ -79,7 +79,7 @@ router.delete('/:id',
  */
 router.post('/:id/documents', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   uploadMiddleware.single('document'),
   validationMiddleware(policyDocumentValidation),
   policyController.uploadDocument
@@ -92,7 +92,7 @@ router.post('/:id/documents',
  */
 router.get('/:id/documents', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   policyController.getPolicyDocuments
 );
 
@@ -103,7 +103,7 @@ router.get('/:id/documents',
  */
 router.delete('/:id/documents/:documentId', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   policyController.deleteDocument
 );
 
@@ -114,7 +114,7 @@ router.delete('/:id/documents/:documentId',
  */
 router.post('/:id/payments', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   validationMiddleware(paymentValidation),
   policyController.addPayment
 );
@@ -126,7 +126,7 @@ router.post('/:id/payments',
  */
 router.get('/:id/payments', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   policyController.getPaymentHistory
 );
 
@@ -137,7 +137,7 @@ router.get('/:id/payments',
  */
 router.post('/:id/renew', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   validationMiddleware(renewalValidation),
   policyController.renewPolicy
 );
@@ -149,7 +149,7 @@ router.post('/:id/renew',
  */
 router.post('/:id/notes', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   policyController.addNote
 );
 
@@ -160,7 +160,7 @@ router.post('/:id/notes',
  */
 router.get('/:id/notes', 
   roleMiddleware(['super_admin', 'manager', 'agent', 'admin']),
-  resourceOwnershipMiddleware('id', 'assignedAgentId'),
+  ownershipMiddleware('assignedAgentId'),
   policyController.getPolicyNotes
 );
 

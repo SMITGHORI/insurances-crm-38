@@ -7,7 +7,7 @@ import { Toaster } from 'sonner';
 // Auth and Layout
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import MainLayout from './components/layout/MainLayout';
+import MainLayout from './components/layout/MainLayout.jsx';
 import Auth from './pages/Auth';
 
 // Pages
@@ -40,6 +40,7 @@ function App() {
               </ProtectedRoute>
             }>
               <Route index element={<Dashboard />} />
+              <Route path="dashboard" element={<Dashboard />} />
               
               <Route path="clients" element={
                 <ProtectedRoute module="clients" action="view">

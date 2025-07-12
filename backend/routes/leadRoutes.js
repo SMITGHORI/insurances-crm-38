@@ -4,7 +4,7 @@ const router = express.Router();
 
 // Import middleware
 const authMiddleware = require('../middleware/auth');
-const { roleMiddleware, resourceOwnershipMiddleware } = require('../middleware/roleMiddleware');
+const { roleMiddleware, ownershipMiddleware } = require('../middleware/roleMiddleware');
 const { validationMiddleware } = require('../middleware/validation');
 
 // Import validation schemas
@@ -40,33 +40,33 @@ router.use(authMiddleware);
 // GET routes
 router.get('/',
   validationMiddleware(queryParamsSchema, 'query'),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getLeads
 );
 
 router.get('/stats',
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getLeadsStats
 );
 
 router.get('/search/:query',
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   searchLeads
 );
 
 router.get('/stale',
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getStaleLeads
 );
 
 router.get('/funnel-report',
   roleMiddleware(['manager', 'super_admin']),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getLeadFunnelReport
 );
 
 router.get('/:id',
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getLeadById
 );
 
@@ -80,20 +80,20 @@ router.post('/',
 router.post('/:id/followups',
   roleMiddleware(['agent', 'manager', 'super_admin']),
   validationMiddleware(followUpSchema),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   addFollowUp
 );
 
 router.post('/:id/notes',
   roleMiddleware(['agent', 'manager', 'super_admin']),
   validationMiddleware(noteSchema),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   addNote
 );
 
 router.post('/:id/convert',
   roleMiddleware(['agent', 'manager', 'super_admin']),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   convertToClient
 );
 
@@ -101,7 +101,7 @@ router.post('/:id/convert',
 router.put('/:id',
   roleMiddleware(['agent', 'manager', 'super_admin']),
   validationMiddleware(updateLeadSchema),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   updateLead
 );
 
@@ -114,7 +114,7 @@ router.put('/:id/assign',
 // DELETE routes
 router.delete('/:id',
   roleMiddleware(['manager', 'super_admin']),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   deleteLead
 );
 

@@ -3,7 +3,7 @@ const router = express.Router();
 
 // Import middleware
 const authMiddleware = require('../middleware/auth');
-const { roleMiddleware, resourceOwnershipMiddleware } = require('../middleware/roleMiddleware');
+const { roleMiddleware, ownershipMiddleware } = require('../middleware/roleMiddleware');
 const { validationMiddleware } = require('../middleware/validation');
 
 // Import validation schemas
@@ -129,7 +129,7 @@ router.use(authMiddleware);
  */
 router.get('/',
   validationMiddleware(queryParamsSchema, 'query'),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getLeads
 );
 
@@ -140,7 +140,7 @@ router.get('/',
  * @query   period, agentId
  */
 router.get('/stats',
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getLeadsStats
 );
 
@@ -152,7 +152,7 @@ router.get('/stats',
  * @query   limit
  */
 router.get('/search/:query',
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   searchLeads
 );
 
@@ -163,7 +163,7 @@ router.get('/search/:query',
  * @query   days - Number of days to consider stale (default: 7)
  */
 router.get('/stale',
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getStaleLeads
 );
 
@@ -175,7 +175,7 @@ router.get('/stale',
  */
 router.get('/funnel-report',
   roleMiddleware(['manager', 'super_admin']),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getLeadFunnelReport
 );
 
@@ -305,7 +305,7 @@ router.post('/',
  * @param   id - Lead ID
  */
 router.get('/:id',
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   getLeadById
 );
 
@@ -319,7 +319,7 @@ router.get('/:id',
 router.put('/:id',
   roleMiddleware(['agent', 'manager', 'super_admin']),
   validationMiddleware(updateLeadSchema),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   updateLead
 );
 
@@ -331,7 +331,7 @@ router.put('/:id',
  */
 router.delete('/:id',
   roleMiddleware(['manager', 'super_admin']),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   deleteLead
 );
 
@@ -345,7 +345,7 @@ router.delete('/:id',
 router.post('/:id/followups',
   roleMiddleware(['agent', 'manager', 'super_admin']),
   validationMiddleware(followUpSchema),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   addFollowUp
 );
 
@@ -359,7 +359,7 @@ router.post('/:id/followups',
 router.post('/:id/notes',
   roleMiddleware(['agent', 'manager', 'super_admin']),
   validationMiddleware(noteSchema),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   addNote
 );
 
@@ -444,7 +444,7 @@ router.put('/:id/assign',
  */
 router.post('/:id/convert',
   roleMiddleware(['agent', 'manager', 'super_admin']),
-  resourceOwnershipMiddleware(),
+  ownershipMiddleware(),
   convertToClient
 );
 
