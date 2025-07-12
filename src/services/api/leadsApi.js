@@ -1,134 +1,343 @@
+
+import MongoDBApiService from './mongodbApiService.js';
+import { API_ENDPOINTS } from '../../config/api.js';
 import { toast } from 'sonner';
-import { leadsBackendApi } from './leadsApiBackend';
 
 /**
- * Frontend API service for leads operations
- * Connects directly to Node.js + Express + MongoDB backend
- * All demo data removed - using real database operations
+ * Consolidated Leads API Service with MongoDB Integration
+ * Single source of truth for all leads operations
  */
-class LeadsApiService {
+class LeadsApiService extends MongoDBApiService {
   constructor() {
-    this.backendApi = leadsBackendApi;
+    super(API_ENDPOINTS.LEADS);
   }
 
   /**
-   * Get all leads with filtering and pagination
+   * Get all leads with advanced filtering and pagination
    */
   async getLeads(params = {}) {
-    console.log('Fetching leads from MongoDB with params:', params);
-    return this.backendApi.getLeads(params);
+    try {
+      console.log('Fetching leads from MongoDB with params:', params);
+      const response = await this.getAll(params);
+      
+      if (response.success && response.data) {
+        return {
+          leads: response.data.leads || response.data,
+          pagination: response.data.pagination || {},
+          totalCount: response.data.totalCount || 0
+        };
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+      throw new Error(`Failed to fetch leads: ${error.message}`);
+    }
   }
 
   /**
-   * Get a single lead by ID
+   * Get single lead by ID
    */
-  async getLeadById(id) {
-    console.log('Fetching lead from MongoDB:', id);
-    return this.backendApi.getLeadById(id);
+  async getLeadById(leadId) {
+    try {
+      console.log('Fetching lead by ID:', leadId);
+      const response = await this.getById(leadId);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error fetching lead:', error);
+      throw new Error(`Failed to fetch lead: ${error.message}`);
+    }
   }
 
   /**
-   * Create a new lead
+   * Create new lead
    */
   async createLead(leadData) {
-    console.log('Creating lead in MongoDB:', leadData);
-    return this.backendApi.createLead(leadData);
+    try {
+      console.log('Creating lead in MongoDB:', leadData);
+      
+      if (!leadData.name || !leadData.email || !leadData.phone) {
+        throw new Error('Missing required fields: name, email, or phone');
+      }
+
+      const response = await this.create(leadData);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error creating lead:', error);
+      throw new Error(`Failed to create lead: ${error.message}`);
+    }
   }
 
   /**
-   * Update an existing lead
+   * Update existing lead
    */
-  async updateLead(id, leadData) {
-    console.log('Updating lead in MongoDB:', id, leadData);
-    return this.backendApi.updateLead(id, leadData);
+  async updateLead(leadId, leadData) {
+    try {
+      console.log('Updating lead in MongoDB:', leadId, leadData);
+      const response = await this.update(leadId, leadData);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error updating lead:', error);
+      throw new Error(`Failed to update lead: ${error.message}`);
+    }
   }
 
   /**
-   * Delete a lead
+   * Delete lead
    */
-  async deleteLead(id) {
-    console.log('Deleting lead from MongoDB:', id);
-    return this.backendApi.deleteLead(id);
+  async deleteLead(leadId) {
+    try {
+      console.log('Deleting lead from MongoDB:', leadId);
+      const response = await this.delete(leadId);
+      return response;
+    } catch (error) {
+      console.error('Error deleting lead:', error);
+      throw new Error(`Failed to delete lead: ${error.message}`);
+    }
   }
 
   /**
    * Add follow-up to lead
    */
   async addFollowUp(leadId, followUpData) {
-    console.log('Adding follow-up to lead in MongoDB:', leadId, followUpData);
-    return this.backendApi.addFollowUp(leadId, followUpData);
+    try {
+      console.log('Adding follow-up to lead:', leadId, followUpData);
+      
+      if (!followUpData.createdBy) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        followUpData.createdBy = user.name || 'Current User';
+      }
+
+      const response = await this.makeRequest(`/${leadId}/followups`, {
+        method: 'POST',
+        body: JSON.stringify(followUpData)
+      });
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error adding follow-up:', error);
+      throw new Error(`Failed to add follow-up: ${error.message}`);
+    }
   }
 
   /**
    * Add note to lead
    */
   async addNote(leadId, noteData) {
-    console.log('Adding note to lead in MongoDB:', leadId, noteData);
-    return this.backendApi.addNote(leadId, noteData);
+    try {
+      console.log('Adding note to lead:', leadId, noteData);
+      
+      if (!noteData.createdBy) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        noteData.createdBy = user.name || 'Current User';
+      }
+
+      const response = await this.makeRequest(`/${leadId}/notes`, {
+        method: 'POST',
+        body: JSON.stringify(noteData)
+      });
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error adding note:', error);
+      throw new Error(`Failed to add note: ${error.message}`);
+    }
   }
 
   /**
    * Assign lead to agent
    */
   async assignLead(leadId, assignmentData) {
-    console.log('Assigning lead in MongoDB:', leadId, assignmentData);
-    return this.backendApi.assignLead(leadId, assignmentData);
+    try {
+      console.log('Assigning lead:', leadId, assignmentData);
+      const response = await this.makeRequest(`/${leadId}/assign`, {
+        method: 'PUT',
+        body: JSON.stringify(assignmentData)
+      });
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error assigning lead:', error);
+      throw new Error(`Failed to assign lead: ${error.message}`);
+    }
   }
 
   /**
    * Convert lead to client
    */
   async convertToClient(leadId) {
-    console.log('Converting lead to client in MongoDB:', leadId);
-    return this.backendApi.convertToClient(leadId);
+    try {
+      console.log('Converting lead to client:', leadId);
+      const response = await this.makeRequest(`/${leadId}/convert`, {
+        method: 'POST'
+      });
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error converting lead:', error);
+      throw new Error(`Failed to convert lead to client: ${error.message}`);
+    }
   }
 
   /**
    * Get leads statistics
    */
   async getLeadsStats(params = {}) {
-    console.log('Fetching leads stats from MongoDB:', params);
-    return this.backendApi.getLeadsStats(params);
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const endpoint = queryString ? `/stats?${queryString}` : '/stats';
+      const response = await this.makeRequest(endpoint);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error fetching leads stats:', error);
+      throw new Error(`Failed to fetch leads statistics: ${error.message}`);
+    }
   }
 
   /**
    * Search leads
    */
   async searchLeads(query, limit = 10) {
-    console.log('Searching leads in MongoDB:', query, limit);
-    return this.backendApi.searchLeads(query, limit);
+    try {
+      if (!query || query.length < 2) {
+        throw new Error('Search query must be at least 2 characters long');
+      }
+
+      const params = { q: query, limit };
+      const queryString = new URLSearchParams(params).toString();
+      const response = await this.makeRequest(`/search?${queryString}`);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error searching leads:', error);
+      throw new Error(`Failed to search leads: ${error.message}`);
+    }
   }
 
   /**
    * Get lead funnel report
    */
   async getLeadFunnelReport(params = {}) {
-    console.log('Fetching lead funnel report from MongoDB:', params);
-    return this.backendApi.getLeadFunnelReport(params);
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const endpoint = queryString ? `/funnel-report?${queryString}` : '/funnel-report';
+      const response = await this.makeRequest(endpoint);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error fetching funnel report:', error);
+      throw new Error(`Failed to fetch lead funnel report: ${error.message}`);
+    }
   }
 
   /**
    * Get stale leads
    */
   async getStaleLeads(days = 7) {
-    console.log('Fetching stale leads from MongoDB:', days);
-    return this.backendApi.getStaleLeads(days);
+    try {
+      const response = await this.makeRequest(`/stale?days=${days}`);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error fetching stale leads:', error);
+      throw new Error(`Failed to fetch stale leads: ${error.message}`);
+    }
   }
 
   /**
    * Bulk update leads
    */
   async bulkUpdateLeads(leadIds, updateData) {
-    console.log('Bulk updating leads in MongoDB:', leadIds, updateData);
-    return this.backendApi.bulkUpdateLeads(leadIds, updateData);
+    try {
+      console.log('Bulk updating leads:', leadIds, updateData);
+      const response = await this.makeRequest('/bulk-update', {
+        method: 'POST',
+        body: JSON.stringify({ leadIds, updateData })
+      });
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error bulk updating leads:', error);
+      throw new Error(`Failed to bulk update leads: ${error.message}`);
+    }
   }
 
   /**
-   * Export leads
+   * Export leads data
    */
   async exportLeads(exportData) {
-    console.log('Exporting leads from MongoDB:', exportData);
-    return this.backendApi.exportLeads(exportData);
+    try {
+      console.log('Exporting leads:', exportData);
+      const response = await this.makeRequest('/export', {
+        method: 'POST',
+        body: JSON.stringify(exportData)
+      });
+      
+      if (response.success && response.data) {
+        // If it's a file download, handle accordingly
+        if (response.data.downloadUrl) {
+          window.open(response.data.downloadUrl, '_blank');
+        }
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error exporting leads:', error);
+      throw new Error(`Failed to export leads: ${error.message}`);
+    }
   }
 }
 

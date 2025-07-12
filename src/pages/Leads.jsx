@@ -13,7 +13,7 @@ import BulkOperationsToolbar from '@/components/leads/BulkOperationsToolbar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Protected from '@/components/Protected';
-import { useLeads, useExportLeads } from '../hooks/useLeads';
+import { useLeads, useExportLeads, useBulkUpdateLeads } from '../hooks/useLeads';
 
 const Leads = () => {
   const navigate = useNavigate();
@@ -34,7 +34,7 @@ const Leads = () => {
   const [selectedLeads, setSelectedLeads] = useState([]);
   const [showReports, setShowReports] = useState(false);
 
-  // Connect to MongoDB for leads data
+  // MongoDB hooks
   const { data: leadsResponse, isLoading, error, refetch } = useLeads({
     ...filterParams,
     search: filterParams.searchTerm,
@@ -42,15 +42,13 @@ const Leads = () => {
     sortOrder: sortDirection
   });
 
-  // Connect to MongoDB for export
   const exportLeadsMutation = useExportLeads();
+  const bulkUpdateMutation = useBulkUpdateLeads();
 
   // Monitor connection status
   useEffect(() => {
     const checkConnection = () => {
-      if (error && error.message.includes('Network error')) {
-        setConnectionStatus('disconnected');
-      } else if (error && error.message.includes('Failed to fetch')) {
+      if (error && (error.message.includes('Network error') || error.message.includes('Failed to fetch'))) {
         setConnectionStatus('disconnected');
       } else if (!error && leadsResponse) {
         setConnectionStatus('connected');
@@ -64,7 +62,7 @@ const Leads = () => {
   useEffect(() => {
     if (connectionStatus === 'disconnected') {
       const retryTimer = setTimeout(() => {
-        console.log('Attempting to reconnect to database...');
+        console.log('Attempting to reconnect to MongoDB...');
         refetch();
       }, 5000);
 
@@ -83,14 +81,60 @@ const Leads = () => {
     try {
       console.log('Exporting leads from MongoDB with filters:', filterParams);
       
-      await exportLeadsMutation.mutateAsync(filterParams);
+      await exportLeadsMutation.mutateAsync({
+        format: 'csv',
+        filters: filterParams
+      });
       
-      console.log('Leads exported successfully from MongoDB');
-      toast.success('Leads data exported successfully');
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error(`Failed to export leads: ${error.message}`);
     }
+  };
+
+  const handleBulkAction = async (action, leadIds) => {
+    try {
+      let updateData = {};
+      
+      switch (action) {
+        case 'assign':
+          // This would typically open a dialog to select agent
+          toast.info('Bulk assignment dialog would open here');
+          return;
+        case 'status':
+          updateData = { status: 'In Progress' };
+          break;
+        case 'priority':
+          updateData = { priority: 'High' };
+          break;
+        default:
+          toast.error('Unknown bulk action');
+          return;
+      }
+
+      await bulkUpdateMutation.mutateAsync({ leadIds, updateData });
+      setSelectedLeads([]);
+      
+    } catch (error) {
+      console.error('Bulk action failed:', error);
+    }
+  };
+
+  const handleLeadSelection = (leadId, selected) => {
+    if (selected) {
+      setSelectedLeads(prev => [...prev, leadId]);
+    } else {
+      setSelectedLeads(prev => prev.filter(id => id !== leadId));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedLeads([]);
+  };
+
+  const handleRetryConnection = () => {
+    console.log('Manual retry connection requested');
+    setConnectionStatus('connecting');
+    refetch();
   };
 
   const updateActiveFilters = (name, value) => {
@@ -122,29 +166,6 @@ const Leads = () => {
     setActiveFilters(activeFilters.filter(filter => filter.name !== filterName));
   };
 
-  const handleBulkAction = (action, leadIds) => {
-    console.log('Bulk action:', action, leadIds);
-    toast.info(`Bulk ${action} operation initiated for ${leadIds.length} leads`);
-  };
-
-  const handleLeadSelection = (leadId, selected) => {
-    if (selected) {
-      setSelectedLeads(prev => [...prev, leadId]);
-    } else {
-      setSelectedLeads(prev => prev.filter(id => id !== leadId));
-    }
-  };
-
-  const handleClearSelection = () => {
-    setSelectedLeads([]);
-  };
-
-  const handleRetryConnection = () => {
-    console.log('Manual retry connection requested');
-    setConnectionStatus('connecting');
-    refetch();
-  };
-
   // Show professional loading skeleton
   if (isLoading) {
     return <PageSkeleton isMobile={isMobile} />;
@@ -157,7 +178,7 @@ const Leads = () => {
         <Alert className="mb-4 border-destructive">
           <WifiOff className="h-4 w-4" />
           <AlertDescription className="flex items-center justify-between">
-            <span>Database connection lost. Attempting to reconnect...</span>
+            <span>MongoDB connection lost. Attempting to reconnect...</span>
             <Button 
               variant="outline" 
               size="sm" 
@@ -212,10 +233,10 @@ const Leads = () => {
               variant="outline" 
               className={isMobile ? "w-full" : ""}
               onClick={handleExport}
-              disabled={exportLeadsMutation.isLoading || connectionStatus === 'disconnected'}
+              disabled={exportLeadsMutation.isPending || connectionStatus === 'disconnected'}
             >
               <Download className="mr-2 h-4 w-4" /> 
-              {exportLeadsMutation.isLoading ? 'Exporting...' : 'Export'}
+              {exportLeadsMutation.isPending ? 'Exporting...' : 'Export'}
             </Button>
           </Protected>
           
@@ -253,7 +274,7 @@ const Leads = () => {
         selectedLeads={selectedLeads}
         onClearSelection={handleClearSelection}
         onBulkAction={handleBulkAction}
-        agents={[]} // Add agents data here when available
+        agents={[]}
       />
       
       {/* Error State */}

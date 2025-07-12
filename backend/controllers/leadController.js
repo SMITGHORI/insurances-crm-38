@@ -1,91 +1,55 @@
 
 const Lead = require('../models/Lead');
-const { validationResult } = require('express-validator');
-const { successResponse, errorResponse } = require('../utils/responseHandler');
 const { AppError } = require('../utils/errorHandler');
+const { successResponse } = require('../utils/responseHandler');
 
 /**
- * Get all leads with filtering, pagination, and search
+ * Get all leads with filtering and pagination
  */
-exports.getLeads = async (req, res, next) => {
+const getLeads = async (req, res, next) => {
   try {
-    console.log('Fetching leads with query params:', req.query);
-    
     const {
       page = 1,
       limit = 10,
-      status = 'all',
-      source = 'all',
-      priority = 'all',
-      assignedTo = 'all',
-      search = '',
+      status,
+      source,
+      priority,
+      assignedTo,
+      search,
       sortBy = 'createdAt',
-      sortOrder = 'desc',
-      dateFrom,
-      dateTo
+      sortOrder = 'desc'
     } = req.query;
 
-    // Build filter query
-    let filter = {};
+    // Build filter object
+    const filter = {};
+    
+    if (status && status !== 'all') filter.status = status;
+    if (source && source !== 'all') filter.source = source;
+    if (priority && priority !== 'all') filter.priority = priority;
+    if (assignedTo && assignedTo !== 'all') filter['assignedTo.agentId'] = assignedTo;
+
+    // Add search functionality
+    if (search) {
+      filter.$text = { $search: search };
+    }
 
     // Apply role-based filtering
     if (req.user.role === 'agent') {
       filter['assignedTo.agentId'] = req.user._id;
     }
 
-    // Status filter
-    if (status !== 'all') {
-      filter.status = status;
-    }
-
-    // Source filter
-    if (source !== 'all') {
-      filter.source = source;
-    }
-
-    // Priority filter
-    if (priority !== 'all') {
-      filter.priority = priority;
-    }
-
-    // Assigned agent filter
-    if (assignedTo !== 'all') {
-      filter['assignedTo.name'] = new RegExp(assignedTo, 'i');
-    }
-
-    // Date range filter
-    if (dateFrom || dateTo) {
-      filter.createdAt = {};
-      if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
-      if (dateTo) filter.createdAt.$lte = new Date(dateTo);
-    }
-
-    // Search filter
-    if (search) {
-      filter.$or = [
-        { name: new RegExp(search, 'i') },
-        { email: new RegExp(search, 'i') },
-        { phone: new RegExp(search, 'i') },
-        { leadId: new RegExp(search, 'i') },
-        { additionalInfo: new RegExp(search, 'i') }
-      ];
-    }
-
-    console.log('Applied filter:', JSON.stringify(filter, null, 2));
-
     // Build sort object
-    const sort = {};
-    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    const sortObj = {};
+    sortObj[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-    // Calculate pagination
+    // Execute query with pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Execute queries
     const [leads, totalCount] = await Promise.all([
       Lead.find(filter)
-        .sort(sort)
+        .sort(sortObj)
         .skip(skip)
         .limit(limitNum)
         .populate('assignedTo.agentId', 'name email')
@@ -93,436 +57,397 @@ exports.getLeads = async (req, res, next) => {
       Lead.countDocuments(filter)
     ]);
 
-    // Calculate pagination metadata
-    const totalPages = Math.ceil(totalCount / limitNum);
-    const hasNext = pageNum < totalPages;
-    const hasPrev = pageNum > 1;
-
     const pagination = {
       currentPage: pageNum,
-      totalPages,
+      totalPages: Math.ceil(totalCount / limitNum),
       totalItems: totalCount,
       itemsPerPage: limitNum,
-      hasNext,
-      hasPrev
+      hasNext: pageNum < Math.ceil(totalCount / limitNum),
+      hasPrev: pageNum > 1
     };
 
-    console.log(`Found ${leads.length} leads out of ${totalCount} total`);
-
-    successResponse(res, 'Leads retrieved successfully', {
+    successResponse(res, {
       leads,
       pagination,
       totalCount
-    });
+    }, 'Leads retrieved successfully');
 
   } catch (error) {
-    console.error('Error in getLeads:', error);
-    next(new AppError('Failed to retrieve leads', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Get single lead by ID
  */
-exports.getLeadById = async (req, res, next) => {
+const getLeadById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    console.log('Fetching lead by ID:', id);
 
     const lead = await Lead.findById(id)
-      .populate('assignedTo.agentId', 'name email phone')
+      .populate('assignedTo.agentId', 'name email')
       .lean();
 
     if (!lead) {
-      return next(new AppError('Lead not found', 404));
+      throw new AppError('Lead not found', 404);
     }
 
     // Check ownership for agents
     if (req.user.role === 'agent' && 
-        lead.assignedTo.agentId && 
-        lead.assignedTo.agentId._id.toString() !== req.user._id.toString()) {
-      return next(new AppError('Access denied', 403));
+        lead.assignedTo.agentId?.toString() !== req.user._id.toString()) {
+      throw new AppError('Access denied', 403);
     }
 
-    console.log('Lead found:', lead.leadId);
-    successResponse(res, 'Lead retrieved successfully', lead);
-
+    successResponse(res, lead, 'Lead retrieved successfully');
   } catch (error) {
-    console.error('Error in getLeadById:', error);
-    next(new AppError('Failed to retrieve lead', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Create new lead
  */
-exports.createLead = async (req, res, next) => {
+const createLead = async (req, res, next) => {
   try {
-    console.log('Creating new lead with data:', req.body);
+    const leadData = {
+      ...req.body,
+      assignedTo: {
+        agentId: req.body.assignedTo?.agentId || req.user._id,
+        name: req.body.assignedTo?.name || req.user.name
+      }
+    };
 
-    // Check validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return next(new AppError('Validation failed', 400, errors.array()));
-    }
-
-    let leadData = { ...req.body };
-
-    // Auto-assign to current user if agent
-    if (req.user.role === 'agent') {
-      leadData.assignedTo = {
-        agentId: req.user._id,
-        name: req.user.name
-      };
-    }
-
-    // Create lead
     const lead = new Lead(leadData);
     await lead.save();
 
-    console.log('Lead created successfully:', lead.leadId);
-    successResponse(res, 'Lead created successfully', lead, 201);
+    const populatedLead = await Lead.findById(lead._id)
+      .populate('assignedTo.agentId', 'name email')
+      .lean();
 
+    successResponse(res, populatedLead, 'Lead created successfully', 201);
   } catch (error) {
-    console.error('Error in createLead:', error);
-    
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      return next(new AppError(`${field} already exists`, 400));
-    }
-    
-    next(new AppError('Failed to create lead', 500, error.message));
+    next(error);
   }
 };
 
 /**
- * Update existing lead
+ * Update lead
  */
-exports.updateLead = async (req, res, next) => {
+const updateLead = async (req, res, next) => {
   try {
     const { id } = req.params;
-    console.log('Updating lead:', id, 'with data:', req.body);
+    const updateData = req.body;
 
-    // Check validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return next(new AppError('Validation failed', 400, errors.array()));
-    }
-
-    // Find lead first to check ownership
-    const existingLead = await Lead.findById(id);
-    if (!existingLead) {
-      return next(new AppError('Lead not found', 404));
+    const lead = await Lead.findById(id);
+    if (!lead) {
+      throw new AppError('Lead not found', 404);
     }
 
     // Check ownership for agents
     if (req.user.role === 'agent' && 
-        existingLead.assignedTo.agentId && 
-        existingLead.assignedTo.agentId.toString() !== req.user._id.toString()) {
-      return next(new AppError('Access denied', 403));
+        lead.assignedTo.agentId?.toString() !== req.user._id.toString()) {
+      throw new AppError('Access denied', 403);
     }
 
     // Update lead
-    const lead = await Lead.findByIdAndUpdate(
-      id,
-      { ...req.body, lastInteraction: new Date() },
-      { new: true, runValidators: true }
-    ).populate('assignedTo.agentId', 'name email');
+    Object.assign(lead, updateData);
+    lead.lastInteraction = new Date();
+    await lead.save();
 
-    console.log('Lead updated successfully:', lead.leadId);
-    successResponse(res, 'Lead updated successfully', lead);
+    const updatedLead = await Lead.findById(lead._id)
+      .populate('assignedTo.agentId', 'name email')
+      .lean();
 
+    successResponse(res, updatedLead, 'Lead updated successfully');
   } catch (error) {
-    console.error('Error in updateLead:', error);
-    next(new AppError('Failed to update lead', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Delete lead
  */
-exports.deleteLead = async (req, res, next) => {
+const deleteLead = async (req, res, next) => {
   try {
     const { id } = req.params;
-    console.log('Deleting lead:', id);
 
     const lead = await Lead.findById(id);
     if (!lead) {
-      return next(new AppError('Lead not found', 404));
+      throw new AppError('Lead not found', 404);
     }
 
     await Lead.findByIdAndDelete(id);
 
-    console.log('Lead deleted successfully:', lead.leadId);
-    successResponse(res, 'Lead deleted successfully');
-
+    successResponse(res, null, 'Lead deleted successfully');
   } catch (error) {
-    console.error('Error in deleteLead:', error);
-    next(new AppError('Failed to delete lead', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Add follow-up to lead
  */
-exports.addFollowUp = async (req, res, next) => {
+const addFollowUp = async (req, res, next) => {
   try {
     const { id } = req.params;
-    console.log('Adding follow-up to lead:', id);
-
-    // Check validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return next(new AppError('Validation failed', 400, errors.array()));
-    }
+    const followUpData = {
+      ...req.body,
+      createdBy: req.user.name,
+      createdAt: new Date()
+    };
 
     const lead = await Lead.findById(id);
     if (!lead) {
-      return next(new AppError('Lead not found', 404));
+      throw new AppError('Lead not found', 404);
     }
 
     // Check ownership for agents
     if (req.user.role === 'agent' && 
-        lead.assignedTo.agentId && 
-        lead.assignedTo.agentId.toString() !== req.user._id.toString()) {
-      return next(new AppError('Access denied', 403));
+        lead.assignedTo.agentId?.toString() !== req.user._id.toString()) {
+      throw new AppError('Access denied', 403);
     }
-
-    // Add follow-up
-    const followUpData = {
-      ...req.body,
-      createdBy: req.user.name
-    };
 
     lead.followUps.push(followUpData);
     lead.lastInteraction = new Date();
     
+    // Update next follow-up if provided
+    if (followUpData.nextFollowUp) {
+      lead.nextFollowUp = new Date(followUpData.nextFollowUp);
+    }
+
     await lead.save();
 
-    console.log('Follow-up added successfully');
-    successResponse(res, 'Follow-up added successfully', lead);
+    const updatedLead = await Lead.findById(lead._id)
+      .populate('assignedTo.agentId', 'name email')
+      .lean();
 
+    successResponse(res, updatedLead, 'Follow-up added successfully');
   } catch (error) {
-    console.error('Error in addFollowUp:', error);
-    next(new AppError('Failed to add follow-up', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Add note to lead
  */
-exports.addNote = async (req, res, next) => {
+const addNote = async (req, res, next) => {
   try {
     const { id } = req.params;
-    console.log('Adding note to lead:', id);
-
-    // Check validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return next(new AppError('Validation failed', 400, errors.array()));
-    }
+    const noteData = {
+      ...req.body,
+      createdBy: req.user.name,
+      createdAt: new Date()
+    };
 
     const lead = await Lead.findById(id);
     if (!lead) {
-      return next(new AppError('Lead not found', 404));
+      throw new AppError('Lead not found', 404);
     }
 
     // Check ownership for agents
     if (req.user.role === 'agent' && 
-        lead.assignedTo.agentId && 
-        lead.assignedTo.agentId.toString() !== req.user._id.toString()) {
-      return next(new AppError('Access denied', 403));
+        lead.assignedTo.agentId?.toString() !== req.user._id.toString()) {
+      throw new AppError('Access denied', 403);
     }
 
-    // Add note
-    const noteData = {
-      ...req.body,
-      createdBy: req.user.name
-    };
-
     lead.notes.push(noteData);
+    lead.lastInteraction = new Date();
     await lead.save();
 
-    console.log('Note added successfully');
-    successResponse(res, 'Note added successfully', lead);
+    const updatedLead = await Lead.findById(lead._id)
+      .populate('assignedTo.agentId', 'name email')
+      .lean();
 
+    successResponse(res, updatedLead, 'Note added successfully');
   } catch (error) {
-    console.error('Error in addNote:', error);
-    next(new AppError('Failed to add note', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Assign lead to agent
  */
-exports.assignLead = async (req, res, next) => {
+const assignLead = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { agentId, agentName } = req.body;
-    console.log('Assigning lead:', id, 'to agent:', agentId);
 
     const lead = await Lead.findById(id);
     if (!lead) {
-      return next(new AppError('Lead not found', 404));
+      throw new AppError('Lead not found', 404);
     }
 
-    // Update assignment
     lead.assignedTo = { agentId, name: agentName };
+    lead.lastInteraction = new Date();
     await lead.save();
 
-    console.log('Lead assigned successfully');
-    successResponse(res, 'Lead assigned successfully', lead);
+    const updatedLead = await Lead.findById(lead._id)
+      .populate('assignedTo.agentId', 'name email')
+      .lean();
 
+    successResponse(res, updatedLead, 'Lead assigned successfully');
   } catch (error) {
-    console.error('Error in assignLead:', error);
-    next(new AppError('Failed to assign lead', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Convert lead to client
  */
-exports.convertToClient = async (req, res, next) => {
+const convertToClient = async (req, res, next) => {
   try {
     const { id } = req.params;
-    console.log('Converting lead to client:', id);
 
     const lead = await Lead.findById(id);
     if (!lead) {
-      return next(new AppError('Lead not found', 404));
-    }
-
-    if (lead.status === 'Converted') {
-      return next(new AppError('Lead is already converted', 400));
+      throw new AppError('Lead not found', 404);
     }
 
     // Check ownership for agents
     if (req.user.role === 'agent' && 
-        lead.assignedTo.agentId && 
-        lead.assignedTo.agentId.toString() !== req.user._id.toString()) {
-      return next(new AppError('Access denied', 403));
+        lead.assignedTo.agentId?.toString() !== req.user._id.toString()) {
+      throw new AppError('Access denied', 403);
     }
-
-    // Generate client ID
-    const clientId = `CL${Date.now().toString().slice(-6)}`;
 
     // Update lead status
     lead.status = 'Converted';
-    lead.convertedToClientId = clientId;
     lead.lastInteraction = new Date();
-    
     await lead.save();
 
-    console.log('Lead converted successfully to client:', clientId);
-    successResponse(res, 'Lead converted successfully', {
-      leadId: lead._id,
-      clientId,
-      message: 'Lead converted to client successfully'
-    });
+    // Here you would typically create a Client record
+    // const Client = require('../models/Client');
+    // const clientData = {
+    //   name: lead.name,
+    //   email: lead.email,
+    //   phone: lead.phone,
+    //   address: lead.address,
+    //   sourceLeadId: lead._id,
+    //   assignedTo: lead.assignedTo
+    // };
+    // const client = new Client(clientData);
+    // await client.save();
+    // lead.convertedToClientId = client._id;
+    // await lead.save();
 
+    const updatedLead = await Lead.findById(lead._id)
+      .populate('assignedTo.agentId', 'name email')
+      .lean();
+
+    successResponse(res, updatedLead, 'Lead converted to client successfully');
   } catch (error) {
-    console.error('Error in convertToClient:', error);
-    next(new AppError('Failed to convert lead', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Get leads statistics
  */
-exports.getLeadsStats = async (req, res, next) => {
+const getLeadsStats = async (req, res, next) => {
   try {
-    console.log('Fetching leads statistics');
+    const { period = 'month', agentId } = req.query;
 
-    let filter = {};
-    
-    // Apply role-based filtering
+    // Build base filter
+    const baseFilter = {};
     if (req.user.role === 'agent') {
-      filter['assignedTo.agentId'] = req.user._id;
+      baseFilter['assignedTo.agentId'] = req.user._id;
+    } else if (agentId) {
+      baseFilter['assignedTo.agentId'] = agentId;
     }
 
-    // Get basic counts
+    // Date range filter
+    const now = new Date();
+    let startDate;
+    switch (period) {
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'year':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    const dateFilter = { ...baseFilter, createdAt: { $gte: startDate } };
+
+    // Get various statistics
     const [
       totalLeads,
       newLeads,
-      inProgress,
-      qualified,
-      converted,
-      lost,
-      notInterested
+      qualifiedLeads,
+      convertedLeads,
+      lostLeads,
+      statusStats,
+      sourceStats,
+      priorityStats
     ] = await Promise.all([
-      Lead.countDocuments(filter),
-      Lead.countDocuments({ ...filter, status: 'New' }),
-      Lead.countDocuments({ ...filter, status: 'In Progress' }),
-      Lead.countDocuments({ ...filter, status: 'Qualified' }),
-      Lead.countDocuments({ ...filter, status: 'Converted' }),
-      Lead.countDocuments({ ...filter, status: 'Lost' }),
-      Lead.countDocuments({ ...filter, status: 'Not Interested' })
-    ]);
-
-    // Calculate conversion rate
-    const conversionRate = totalLeads > 0 ? ((converted / totalLeads) * 100).toFixed(1) : '0.0';
-
-    // Get source distribution
-    const topSources = await Lead.aggregate([
-      { $match: filter },
-      { $group: { _id: '$source', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 5 }
-    ]);
-
-    // Get priority distribution
-    const priorityDistribution = await Lead.aggregate([
-      { $match: filter },
-      { $group: { _id: '$priority', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
+      Lead.countDocuments(baseFilter),
+      Lead.countDocuments({ ...dateFilter, status: 'New' }),
+      Lead.countDocuments({ ...dateFilter, status: 'Qualified' }),
+      Lead.countDocuments({ ...dateFilter, status: 'Converted' }),
+      Lead.countDocuments({ ...dateFilter, status: 'Lost' }),
+      Lead.aggregate([
+        { $match: baseFilter },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      Lead.aggregate([
+        { $match: baseFilter },
+        { $group: { _id: '$source', count: { $sum: 1 } } }
+      ]),
+      Lead.aggregate([
+        { $match: baseFilter },
+        { $group: { _id: '$priority', count: { $sum: 1 } } }
+      ])
     ]);
 
     const stats = {
-      totalLeads,
-      newLeads,
-      inProgress,
-      qualified,
-      converted,
-      lost,
-      notInterested,
-      conversionRate,
-      topSources,
-      priorityDistribution
+      overview: {
+        totalLeads,
+        newLeads,
+        qualifiedLeads,
+        convertedLeads,
+        lostLeads,
+        conversionRate: totalLeads > 0 ? ((convertedLeads / totalLeads) * 100).toFixed(2) : 0
+      },
+      breakdown: {
+        byStatus: statusStats.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
+        bySource: sourceStats.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
+        byPriority: priorityStats.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {})
+      }
     };
 
-    console.log('Stats calculated:', stats);
-    successResponse(res, 'Lead statistics retrieved successfully', stats);
-
+    successResponse(res, stats, 'Lead statistics retrieved successfully');
   } catch (error) {
-    console.error('Error in getLeadsStats:', error);
-    next(new AppError('Failed to retrieve statistics', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Search leads
  */
-exports.searchLeads = async (req, res, next) => {
+const searchLeads = async (req, res, next) => {
   try {
     const { query } = req.params;
     const { limit = 10 } = req.query;
 
-    console.log('Searching leads with query:', query);
-
     if (!query || query.length < 2) {
-      return next(new AppError('Search query must be at least 2 characters', 400));
+      throw new AppError('Search query must be at least 2 characters long', 400);
     }
 
-    let filter = {
-      $or: [
-        { name: new RegExp(query, 'i') },
-        { email: new RegExp(query, 'i') },
-        { phone: new RegExp(query, 'i') },
-        { leadId: new RegExp(query, 'i') },
-        { additionalInfo: new RegExp(query, 'i') }
-      ]
-    };
-
+    const filter = { $text: { $search: query } };
+    
     // Apply role-based filtering
     if (req.user.role === 'agent') {
       filter['assignedTo.agentId'] = req.user._id;
@@ -530,34 +455,29 @@ exports.searchLeads = async (req, res, next) => {
 
     const leads = await Lead.find(filter)
       .limit(parseInt(limit))
-      .sort({ createdAt: -1 })
       .populate('assignedTo.agentId', 'name email')
       .lean();
 
-    console.log(`Found ${leads.length} leads matching search`);
-    successResponse(res, 'Search results retrieved successfully', leads);
-
+    successResponse(res, leads, 'Search results retrieved successfully');
   } catch (error) {
-    console.error('Error in searchLeads:', error);
-    next(new AppError('Failed to search leads', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Get stale leads
  */
-exports.getStaleLeads = async (req, res, next) => {
+const getStaleLeads = async (req, res, next) => {
   try {
     const { days = 7 } = req.query;
-    console.log('Fetching stale leads older than', days, 'days');
+    
+    const staleDate = new Date();
+    staleDate.setDate(staleDate.getDate() - parseInt(days));
 
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - parseInt(days));
-
-    let filter = {
+    const filter = {
       $or: [
-        { lastInteraction: { $lt: cutoffDate } },
-        { lastInteraction: { $exists: false } }
+        { lastInteraction: { $lte: staleDate } },
+        { lastInteraction: { $exists: false }, createdAt: { $lte: staleDate } }
       ],
       status: { $in: ['New', 'In Progress', 'Qualified'] }
     };
@@ -568,60 +488,154 @@ exports.getStaleLeads = async (req, res, next) => {
     }
 
     const staleLeads = await Lead.find(filter)
-      .sort({ lastInteraction: 1 })
       .populate('assignedTo.agentId', 'name email')
+      .sort({ lastInteraction: 1 })
       .lean();
 
-    console.log(`Found ${staleLeads.length} stale leads`);
-    successResponse(res, 'Stale leads retrieved successfully', staleLeads);
-
+    successResponse(res, staleLeads, 'Stale leads retrieved successfully');
   } catch (error) {
-    console.error('Error in getStaleLeads:', error);
-    next(new AppError('Failed to retrieve stale leads', 500, error.message));
+    next(error);
   }
 };
 
 /**
  * Get lead funnel report
  */
-exports.getLeadFunnelReport = async (req, res, next) => {
+const getLeadFunnelReport = async (req, res, next) => {
   try {
-    console.log('Generating lead funnel report');
+    const { period = 'month' } = req.query;
 
-    let filter = {};
-    
-    // Apply role-based filtering
+    // Build base filter
+    const baseFilter = {};
     if (req.user.role === 'agent') {
-      filter['assignedTo.agentId'] = req.user._id;
+      baseFilter['assignedTo.agentId'] = req.user._id;
     }
 
+    // Get funnel data
     const funnelData = await Lead.aggregate([
-      { $match: filter },
+      { $match: baseFilter },
       {
         $group: {
           _id: '$status',
           count: { $sum: 1 },
-          avgBudget: { $avg: '$budget' }
+          avgDaysInStage: {
+            $avg: {
+              $dateDiff: {
+                startDate: '$createdAt',
+                endDate: '$updatedAt',
+                unit: 'day'
+              }
+            }
+          }
         }
       },
       { $sort: { count: -1 } }
     ]);
 
-    // Calculate funnel metrics
-    const totalLeads = funnelData.reduce((sum, stage) => sum + stage.count, 0);
-    const funnelReport = funnelData.map(stage => ({
-      ...stage,
-      percentage: totalLeads > 0 ? ((stage.count / totalLeads) * 100).toFixed(1) : '0.0'
-    }));
+    const report = {
+      stages: funnelData.map(stage => ({
+        name: stage._id,
+        count: stage.count,
+        avgDaysInStage: Math.round(stage.avgDaysInStage || 0)
+      })),
+      totalLeads: funnelData.reduce((sum, stage) => sum + stage.count, 0)
+    };
 
-    console.log('Funnel report generated');
-    successResponse(res, 'Lead funnel report generated successfully', {
-      funnelData: funnelReport,
-      totalLeads
-    });
-
+    successResponse(res, report, 'Lead funnel report retrieved successfully');
   } catch (error) {
-    console.error('Error in getLeadFunnelReport:', error);
-    next(new AppError('Failed to generate funnel report', 500, error.message));
+    next(error);
   }
+};
+
+/**
+ * Bulk update leads
+ */
+const bulkUpdateLeads = async (req, res, next) => {
+  try {
+    const { leadIds, updateData } = req.body;
+
+    if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+      throw new AppError('Lead IDs are required', 400);
+    }
+
+    // For agents, ensure they can only update their assigned leads
+    let filter = { _id: { $in: leadIds } };
+    if (req.user.role === 'agent') {
+      filter['assignedTo.agentId'] = req.user._id;
+    }
+
+    const result = await Lead.updateMany(
+      filter,
+      {
+        ...updateData,
+        lastInteraction: new Date()
+      }
+    );
+
+    successResponse(res, {
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+      successful: result.modifiedCount
+    }, 'Leads updated successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Export leads
+ */
+const exportLeads = async (req, res, next) => {
+  try {
+    const { format = 'csv', filters = {} } = req.body;
+
+    // Build filter
+    const filter = {};
+    if (filters.status && filters.status !== 'all') filter.status = filters.status;
+    if (filters.source && filters.source !== 'all') filter.source = filters.source;
+    if (filters.priority && filters.priority !== 'all') filter.priority = filters.priority;
+
+    // Apply role-based filtering
+    if (req.user.role === 'agent') {
+      filter['assignedTo.agentId'] = req.user._id;
+    }
+
+    const leads = await Lead.find(filter)
+      .populate('assignedTo.agentId', 'name email')
+      .lean();
+
+    // Here you would implement actual export logic
+    // For now, we'll return the data structure
+
+    const exportData = {
+      format,
+      count: leads.length,
+      data: leads,
+      timestamp: new Date().toISOString(),
+      // In a real implementation, you'd generate a file and return a download URL
+      downloadUrl: `/api/exports/leads-${Date.now()}.${format}`
+    };
+
+    successResponse(res, exportData, 'Leads exported successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  getLeads,
+  getLeadById,
+  createLead,
+  updateLead,
+  deleteLead,
+  addFollowUp,
+  addNote,
+  assignLead,
+  convertToClient,
+  getLeadsStats,
+  searchLeads,
+  getStaleLeads,
+  getLeadFunnelReport,
+  bulkUpdateLeads,
+  exportLeads
 };

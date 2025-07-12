@@ -30,7 +30,9 @@ const {
   getLeadsStats,
   searchLeads,
   getStaleLeads,
-  getLeadFunnelReport
+  getLeadFunnelReport,
+  bulkUpdateLeads,
+  exportLeads
 } = require('../controllers/leadController');
 
 // Apply authentication middleware to all routes
@@ -446,6 +448,28 @@ router.post('/:id/convert',
   roleMiddleware(['agent', 'manager', 'super_admin']),
   ownershipMiddleware(),
   convertToClient
+);
+
+/**
+ * @route   POST /api/leads/bulk-update
+ * @desc    Bulk update leads
+ * @access  Private (Managers, Super Admin)
+ * @body    leadIds array, updateData object
+ */
+router.post('/bulk-update',
+  roleMiddleware(['manager', 'super_admin']),
+  bulkUpdateLeads
+);
+
+/**
+ * @route   POST /api/leads/export
+ * @desc    Export leads data
+ * @access  Private (All authenticated users)
+ * @body    Export configuration (format, filters)
+ */
+router.post('/export',
+  ownershipMiddleware(),
+  exportLeads
 );
 
 module.exports = router;
