@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
@@ -7,7 +8,6 @@ import {
   Mail,
   Phone,
   Calendar,
-  ShieldCheck,
   Trash2,
   AlertTriangle
 } from 'lucide-react';
@@ -27,7 +27,7 @@ import {
 import AgentDetailTabs from '@/components/agents/AgentDetailTabs';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useAgentById, useUpdateAgent, useDeleteAgent } from '@/hooks/useAgents';
+import { useAgent, useUpdateAgent, useDeleteAgent, useAgentPerformance } from '@/hooks/useAgents';
 
 const AgentDetails = () => {
   const { id } = useParams();
@@ -36,7 +36,8 @@ const AgentDetails = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   
   // API hooks
-  const { data: agent, isLoading: loading, error, refetch } = useAgentById(id);
+  const { data: agent, isLoading: loading, error, refetch } = useAgent(id);
+  const { data: performance, isLoading: performanceLoading } = useAgentPerformance(id, { timeframe: '30d' });
   const updateAgentMutation = useUpdateAgent();
   const deleteAgentMutation = useDeleteAgent();
   
@@ -78,7 +79,7 @@ const AgentDetails = () => {
     try {
       await updateAgentMutation.mutateAsync({
         id: agent._id || agent.id,
-        data: { status: newStatus }
+        agentData: { status: newStatus }
       });
       
       // Refetch agent data to get updated information
@@ -173,7 +174,7 @@ const AgentDetails = () => {
           <div className="flex flex-col md:flex-row gap-6">
             <div className="flex-shrink-0">
               <img 
-                src={agent.avatar} 
+                src={agent.avatar || '/api/placeholder/96/96'} 
                 alt={agent.name} 
                 className="h-24 w-24 rounded-full object-cover border-4 border-gray-100"
               />
@@ -201,7 +202,7 @@ const AgentDetails = () => {
                 </div>
                 <div className="flex items-center">
                   <Calendar size={18} className="text-gray-500 mr-2" />
-                  <span className="text-sm">Joined: {agent.joinDate}</span>
+                  <span className="text-sm">Joined: {agent.hireDate || 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -258,7 +259,7 @@ const AgentDetails = () => {
         <div className="flex flex-col md:flex-row gap-6">
           <div className="flex-shrink-0">
             <img 
-              src={agent.avatar} 
+              src={agent.avatar || '/api/placeholder/96/96'} 
               alt={agent.name} 
               className="h-24 w-24 rounded-full object-cover border-4 border-gray-100"
             />
@@ -275,8 +276,8 @@ const AgentDetails = () => {
               </div>
               <div className="mt-2 sm:mt-0">
                 <span className="text-sm font-medium text-gray-500">License #:</span>
-                <span className="ml-1 text-sm">{agent.licenseNumber || 'IRDAI-AG-25896-12/14'}</span>
-                <div className="text-xs text-gray-500">Expires: {agent.licenseExpiry || '14 Dec 2025'}</div>
+                <span className="ml-1 text-sm">{agent.licenseNumber || 'N/A'}</span>
+                <div className="text-xs text-gray-500">Expires: {agent.licenseExpiry || 'N/A'}</div>
               </div>
             </div>
             
@@ -291,7 +292,7 @@ const AgentDetails = () => {
               </div>
               <div className="flex items-center">
                 <Calendar size={18} className="text-gray-500 mr-2" />
-                <span className="text-sm">Joined: {agent.joinDate}</span>
+                <span className="text-sm">Joined: {agent.hireDate || 'N/A'}</span>
               </div>
             </div>
           </div>

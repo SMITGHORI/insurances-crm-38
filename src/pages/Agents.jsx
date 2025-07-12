@@ -6,8 +6,9 @@ import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import AgentTable from '@/components/agents/AgentTable';
-import { useAgents, useDeleteAgent } from '@/hooks/useAgents';
+import { useAgents, useDeleteAgent, useAgentStats } from '@/hooks/useAgents';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
+import AgentStatsCards from '@/components/agents/AgentStatsCards';
 
 const Agents = () => {
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ const Agents = () => {
     sortDirection,
   };
 
-  // React Query hooks
+  // React Query hooks for data fetching
   const {
     data: agentsResponse,
     isLoading,
@@ -37,6 +38,11 @@ const Agents = () => {
     error,
     refetch
   } = useAgents(queryParams);
+
+  const {
+    data: agentStats,
+    isLoading: statsLoading
+  } = useAgentStats();
 
   const deleteAgentMutation = useDeleteAgent();
 
@@ -93,8 +99,8 @@ const Agents = () => {
   const handleExport = async () => {
     try {
       toast.info('Exporting agents data...');
-      // Implementation for export would go here
-      // This could call an API endpoint to generate CSV/Excel export
+      // This would call the export API endpoint
+      console.log('Export functionality would be implemented here');
     } catch (error) {
       toast.error('Failed to export agents');
     }
@@ -126,6 +132,15 @@ const Agents = () => {
         <Button onClick={handleCreateAgent} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" /> {isMobile ? 'Create' : 'Create Agent'}
         </Button>
+      </div>
+
+      {/* Agent Statistics Cards */}
+      <div className="mb-6">
+        <AgentStatsCards 
+          stats={agentStats} 
+          isLoading={statsLoading}
+          totalAgents={totalAgents}
+        />
       </div>
 
       <div className="max-w-full overflow-hidden mb-20 sm:mb-0">

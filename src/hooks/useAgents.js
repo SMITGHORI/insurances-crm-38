@@ -4,9 +4,8 @@ import { toast } from 'sonner';
 import { agentsApi } from '../services/api/agentsApi';
 
 /**
- * React Query hooks for agent management
- * Provides optimistic updates and proper error handling
- * Works with both backend API and offline mock data
+ * React Query hooks for agent management with MongoDB backend integration
+ * Consolidated and optimized for performance and reliability
  */
 
 // Query keys for cache management
@@ -20,6 +19,9 @@ export const agentsQueryKeys = {
   policies: (id) => [...agentsQueryKeys.detail(id), 'policies'],
   commissions: (id) => [...agentsQueryKeys.detail(id), 'commissions'],
   performance: (id) => [...agentsQueryKeys.detail(id), 'performance'],
+  documents: (id) => [...agentsQueryKeys.detail(id), 'documents'],
+  notes: (id) => [...agentsQueryKeys.detail(id), 'notes'],
+  stats: ['agents', 'stats'],
 };
 
 /**
@@ -31,16 +33,14 @@ export const useAgents = (params = {}) => {
     queryFn: () => agentsApi.getAgents(params),
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error) => {
-      // Don't retry if we're in offline mode
-      if (agentsApi.isOfflineMode) return false;
       return failureCount < 2;
     },
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
     onError: (error) => {
       console.error('Error fetching agents:', error);
-      if (!agentsApi.isOfflineMode) {
-        toast.error('Failed to load agents');
-      }
+      toast.error('Failed to load agents', {
+        description: error.message
+      });
     },
   });
 };
@@ -52,17 +52,16 @@ export const useAgent = (agentId) => {
   return useQuery({
     queryKey: agentsQueryKeys.detail(agentId),
     queryFn: () => agentsApi.getAgentById(agentId),
-    enabled: !!agentId, // Only run if agentId exists
+    enabled: !!agentId,
     staleTime: 5 * 60 * 1000,
     retry: (failureCount, error) => {
-      if (agentsApi.isOfflineMode) return false;
       return failureCount < 2;
     },
     onError: (error) => {
       console.error('Error fetching agent:', error);
-      if (!agentsApi.isOfflineMode) {
-        toast.error('Failed to load agent details');
-      }
+      toast.error('Failed to load agent details', {
+        description: error.message
+      });
     },
   });
 };
@@ -88,12 +87,15 @@ export const useCreateAgent = () => {
       // Invalidate and refetch agents list
       queryClient.invalidateQueries({ queryKey: agentsQueryKeys.lists() });
       
-      const mode = agentsApi.isOfflineMode ? ' (offline mode)' : '';
-      toast.success(`Agent "${data.name}" created successfully${mode}`);
+      toast.success('Agent created successfully', {
+        description: `${data.name || 'Agent'} has been created`
+      });
     },
     onError: (error, variables) => {
       console.error('Error creating agent:', error);
-      toast.error(`Failed to create agent: ${error.message}`);
+      toast.error('Failed to create agent', {
+        description: error.message
+      });
     },
   });
 };
@@ -108,11 +110,6 @@ export const useUpdateAgent = () => {
     mutationFn: async ({ id, agentData }) => {
       console.log('Updating agent with data:', agentData);
       
-      // Basic validation
-      if (!agentData.name || !agentData.email || !agentData.phone) {
-        throw new Error('Missing required fields: name, email, or phone');
-      }
-
       return agentsApi.updateAgent(id, agentData);
     },
     onSuccess: (data, variables) => {
@@ -124,12 +121,15 @@ export const useUpdateAgent = () => {
       // Invalidate lists to refresh them
       queryClient.invalidateQueries({ queryKey: agentsQueryKeys.lists() });
       
-      const mode = agentsApi.isOfflineMode ? ' (offline mode)' : '';
-      toast.success(`Agent "${data.name}" updated successfully${mode}`);
+      toast.success('Agent updated successfully', {
+        description: `${data.name || 'Agent'} has been updated`
+      });
     },
     onError: (error, variables) => {
       console.error('Error updating agent:', error);
-      toast.error(`Failed to update agent: ${error.message}`);
+      toast.error('Failed to update agent', {
+        description: error.message
+      });
     },
   });
 };
@@ -149,12 +149,13 @@ export const useDeleteAgent = () => {
       // Invalidate lists to refresh them
       queryClient.invalidateQueries({ queryKey: agentsQueryKeys.lists() });
       
-      const mode = agentsApi.isOfflineMode ? ' (offline mode)' : '';
-      toast.success(`Agent deleted successfully${mode}`);
+      toast.success('Agent deleted successfully');
     },
     onError: (error) => {
       console.error('Error deleting agent:', error);
-      toast.error(`Failed to delete agent: ${error.message}`);
+      toast.error('Failed to delete agent', {
+        description: error.message
+      });
     },
   });
 };
@@ -169,14 +170,13 @@ export const useAgentClients = (agentId, params = {}) => {
     enabled: !!agentId,
     staleTime: 5 * 60 * 1000,
     retry: (failureCount, error) => {
-      if (agentsApi.isOfflineMode) return false;
       return failureCount < 2;
     },
     onError: (error) => {
       console.error('Error fetching agent clients:', error);
-      if (!agentsApi.isOfflineMode) {
-        toast.error('Failed to load agent clients');
-      }
+      toast.error('Failed to load agent clients', {
+        description: error.message
+      });
     },
   });
 };
@@ -191,14 +191,13 @@ export const useAgentPolicies = (agentId, params = {}) => {
     enabled: !!agentId,
     staleTime: 5 * 60 * 1000,
     retry: (failureCount, error) => {
-      if (agentsApi.isOfflineMode) return false;
       return failureCount < 2;
     },
     onError: (error) => {
       console.error('Error fetching agent policies:', error);
-      if (!agentsApi.isOfflineMode) {
-        toast.error('Failed to load agent policies');
-      }
+      toast.error('Failed to load agent policies', {
+        description: error.message
+      });
     },
   });
 };
@@ -213,14 +212,13 @@ export const useAgentCommissions = (agentId, params = {}) => {
     enabled: !!agentId,
     staleTime: 5 * 60 * 1000,
     retry: (failureCount, error) => {
-      if (agentsApi.isOfflineMode) return false;
       return failureCount < 2;
     },
     onError: (error) => {
       console.error('Error fetching agent commissions:', error);
-      if (!agentsApi.isOfflineMode) {
-        toast.error('Failed to load agent commissions');
-      }
+      toast.error('Failed to load agent commissions', {
+        description: error.message
+      });
     },
   });
 };
@@ -235,20 +233,19 @@ export const useAgentPerformance = (agentId, params = {}) => {
     enabled: !!agentId,
     staleTime: 5 * 60 * 1000,
     retry: (failureCount, error) => {
-      if (agentsApi.isOfflineMode) return false;
       return failureCount < 2;
     },
     onError: (error) => {
       console.error('Error fetching agent performance:', error);
-      if (!agentsApi.isOfflineMode) {
-        toast.error('Failed to load agent performance data');
-      }
+      toast.error('Failed to load agent performance data', {
+        description: error.message
+      });
     },
   });
 };
 
 /**
- * Hook to fetch agent's commission summary (monthly breakdown)
+ * Hook to fetch agent's commission summary
  */
 export const useAgentCommissionSummary = (agentId, params = {}) => {
   return useQuery({
@@ -257,15 +254,49 @@ export const useAgentCommissionSummary = (agentId, params = {}) => {
     enabled: !!agentId,
     staleTime: 5 * 60 * 1000,
     retry: (failureCount, error) => {
-      if (agentsApi.isOfflineMode) return false;
       return failureCount < 2;
     },
     onError: (error) => {
       console.error('Error fetching agent commission summary:', error);
-      if (!agentsApi.isOfflineMode) {
-        toast.error('Failed to load agent commission summary');
-      }
+      toast.error('Failed to load agent commission summary', {
+        description: error.message
+      });
     },
+  });
+};
+
+/**
+ * Hook to fetch agent documents
+ */
+export const useAgentDocuments = (agentId) => {
+  return useQuery({
+    queryKey: agentsQueryKeys.documents(agentId),
+    queryFn: () => agentsApi.getAgentDocuments(agentId),
+    enabled: !!agentId,
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+/**
+ * Hook to fetch agent notes
+ */
+export const useAgentNotes = (agentId) => {
+  return useQuery({
+    queryKey: agentsQueryKeys.notes(agentId),
+    queryFn: () => agentsApi.getAgentNotes(agentId),
+    enabled: !!agentId,
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+/**
+ * Hook to fetch agent statistics
+ */
+export const useAgentStats = () => {
+  return useQuery({
+    queryKey: agentsQueryKeys.stats,
+    queryFn: () => agentsApi.getAgentStats(),
+    staleTime: 15 * 60 * 1000, // 15 minutes
   });
 };
 

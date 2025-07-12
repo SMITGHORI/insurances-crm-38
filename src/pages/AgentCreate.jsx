@@ -1,7 +1,7 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,30 +17,88 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
+import { useCreateAgent } from '@/hooks/useAgents';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const AgentCreate = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = React.useState(false);
-  const isMobile = window.innerWidth <= 768;
+  const isMobile = useIsMobile();
+  const createAgentMutation = useCreateAgent();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    specialization: '',
+    region: '',
+    licenseNumber: '',
+    licenseExpiry: '',
+    hireDate: '',
+    status: 'onboarding',
+    commissionRate: '',
+    personalInfo: {
+      dateOfBirth: '',
+      gender: ''
+    },
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'India'
+    },
+    bankDetails: {
+      bankName: '',
+      accountNumber: '',
+      routingNumber: '',
+      accountType: 'savings'
+    }
+  });
 
-  const handleSubmit = (e) => {
+  const handleInputChange = (field, value, nested = null) => {
+    if (nested) {
+      setFormData(prev => ({
+        ...prev,
+        [nested]: {
+          ...prev[nested],
+          [field]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // In a real app, this would send the form data to an API
     
-    toast.success("Agent Created", {
-      description: "The agent profile has been created successfully.",
-    });
-    
-    navigate('/agents');
+    try {
+      // Basic validation
+      if (!formData.name || !formData.email || !formData.phone) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      // Prepare data for submission
+      const agentData = {
+        ...formData,
+        commissionRate: parseFloat(formData.commissionRate) || 0
+      };
+
+      await createAgentMutation.mutateAsync(agentData);
+      navigate('/agents');
+    } catch (error) {
+      console.error('Error creating agent:', error);
+    }
   };
 
   // Show professional loading skeleton
-  if (loading) {
+  if (createAgentMutation.isLoading) {
     return <PageSkeleton isMobile={isMobile} />;
   }
 
@@ -67,28 +125,45 @@ const AgentCreate = () => {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name *</Label>
-                  <Input id="firstName" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name *</Label>
-                  <Input id="lastName" required />
+                  <Label htmlFor="name">Full Name *</Label>
+                  <Input 
+                    id="name" 
+                    value={formData.name}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address *</Label>
-                  <Input id="email" type="email" required />
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number *</Label>
-                  <Input id="phone" required />
+                  <Input 
+                    id="phone" 
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dob">Date of Birth *</Label>
-                  <Input id="dob" type="date" required />
+                  <Label htmlFor="dob">Date of Birth</Label>
+                  <Input 
+                    id="dob" 
+                    type="date" 
+                    value={formData.personalInfo.dateOfBirth}
+                    onChange={(e) => handleInputChange('dateOfBirth', e.target.value, 'personalInfo')}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="gender">Gender</Label>
-                  <Select>
+                  <Select onValueChange={(value) => handleInputChange('gender', value, 'personalInfo')}>
                     <SelectTrigger id="gender">
                       <SelectValue placeholder="Select Gender" />
                     </SelectTrigger>
@@ -96,7 +171,7 @@ const AgentCreate = () => {
                       <SelectItem value="male">Male</SelectItem>
                       <SelectItem value="female">Female</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
-                      <SelectItem value="prefer-not-to-say">Prefer not to say</SelectItem>
+                      <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -113,24 +188,49 @@ const AgentCreate = () => {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="address">Address *</Label>
-                  <Textarea id="address" required />
+                  <Label htmlFor="street">Address *</Label>
+                  <Textarea 
+                    id="street" 
+                    value={formData.address.street}
+                    onChange={(e) => handleInputChange('street', e.target.value, 'address')}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="city">City *</Label>
-                  <Input id="city" required />
+                  <Input 
+                    id="city" 
+                    value={formData.address.city}
+                    onChange={(e) => handleInputChange('city', e.target.value, 'address')}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="state">State *</Label>
-                  <Input id="state" required />
+                  <Input 
+                    id="state" 
+                    value={formData.address.state}
+                    onChange={(e) => handleInputChange('state', e.target.value, 'address')}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="zipCode">Zip/Postal Code *</Label>
-                  <Input id="zipCode" required />
+                  <Input 
+                    id="zipCode" 
+                    value={formData.address.zipCode}
+                    onChange={(e) => handleInputChange('zipCode', e.target.value, 'address')}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="country">Country *</Label>
-                  <Input id="country" defaultValue="India" required />
+                  <Input 
+                    id="country" 
+                    value={formData.address.country}
+                    onChange={(e) => handleInputChange('country', e.target.value, 'address')}
+                    required 
+                  />
                 </div>
               </div>
             </CardContent>
@@ -146,15 +246,26 @@ const AgentCreate = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="licenseNumber">License Number *</Label>
-                  <Input id="licenseNumber" required />
+                  <Input 
+                    id="licenseNumber" 
+                    value={formData.licenseNumber}
+                    onChange={(e) => handleInputChange('licenseNumber', e.target.value)}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="licenseExpiry">License Expiry Date *</Label>
-                  <Input id="licenseExpiry" type="date" required />
+                  <Input 
+                    id="licenseExpiry" 
+                    type="date" 
+                    value={formData.licenseExpiry}
+                    onChange={(e) => handleInputChange('licenseExpiry', e.target.value)}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="specialization">Specialization *</Label>
-                  <Select>
+                  <Select onValueChange={(value) => handleInputChange('specialization', value)}>
                     <SelectTrigger id="specialization">
                       <SelectValue placeholder="Select Specialization" />
                     </SelectTrigger>
@@ -168,25 +279,35 @@ const AgentCreate = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="experience">Years of Experience</Label>
-                  <Input id="experience" type="number" min="0" />
+                  <Label htmlFor="region">Region *</Label>
+                  <Input 
+                    id="region" 
+                    value={formData.region}
+                    onChange={(e) => handleInputChange('region', e.target.value)}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="joinDate">Joining Date *</Label>
-                  <Input id="joinDate" type="date" required />
+                  <Label htmlFor="hireDate">Joining Date *</Label>
+                  <Input 
+                    id="hireDate" 
+                    type="date" 
+                    value={formData.hireDate}
+                    onChange={(e) => handleInputChange('hireDate', e.target.value)}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="status">Status *</Label>
-                  <Select>
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="Select Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="onboarding">Onboarding</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="commissionRate">Commission Rate (%)</Label>
+                  <Input 
+                    id="commissionRate" 
+                    type="number" 
+                    step="0.01"
+                    min="0" 
+                    max="100"
+                    value={formData.commissionRate}
+                    onChange={(e) => handleInputChange('commissionRate', e.target.value)}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -201,56 +322,40 @@ const AgentCreate = () => {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="bankName">Bank Name *</Label>
-                  <Input id="bankName" required />
+                  <Label htmlFor="bankName">Bank Name</Label>
+                  <Input 
+                    id="bankName" 
+                    value={formData.bankDetails.bankName}
+                    onChange={(e) => handleInputChange('bankName', e.target.value, 'bankDetails')}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="accountNumber">Account Number *</Label>
-                  <Input id="accountNumber" required />
+                  <Label htmlFor="accountNumber">Account Number</Label>
+                  <Input 
+                    id="accountNumber" 
+                    value={formData.bankDetails.accountNumber}
+                    onChange={(e) => handleInputChange('accountNumber', e.target.value, 'bankDetails')}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="ifscCode">IFSC Code *</Label>
-                  <Input id="ifscCode" required />
+                  <Label htmlFor="routingNumber">Routing Number</Label>
+                  <Input 
+                    id="routingNumber" 
+                    value={formData.bankDetails.routingNumber}
+                    onChange={(e) => handleInputChange('routingNumber', e.target.value, 'bankDetails')}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="accountType">Account Type *</Label>
-                  <Select>
+                  <Label htmlFor="accountType">Account Type</Label>
+                  <Select onValueChange={(value) => handleInputChange('accountType', value, 'bankDetails')}>
                     <SelectTrigger id="accountType">
                       <SelectValue placeholder="Select Account Type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="savings">Savings</SelectItem>
-                      <SelectItem value="current">Current</SelectItem>
+                      <SelectItem value="checking">Checking</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Documents */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Documents</CardTitle>
-              <CardDescription>Upload required agent documents</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="aadhaar">Aadhaar Card *</Label>
-                  <Input id="aadhaar" type="file" accept="image/*,.pdf" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pan">PAN Card *</Label>
-                  <Input id="pan" type="file" accept="image/*,.pdf" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="license">License Copy *</Label>
-                  <Input id="license" type="file" accept="image/*,.pdf" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="photo">Profile Photo *</Label>
-                  <Input id="photo" type="file" accept="image/*" required />
                 </div>
               </div>
             </CardContent>
@@ -261,8 +366,12 @@ const AgentCreate = () => {
             <Button variant="outline" type="button" onClick={() => navigate('/agents')}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-amba-blue hover:bg-blue-800">
-              Create Agent
+            <Button 
+              type="submit" 
+              className="bg-amba-blue hover:bg-blue-800"
+              disabled={createAgentMutation.isLoading}
+            >
+              {createAgentMutation.isLoading ? 'Creating...' : 'Create Agent'}
             </Button>
           </div>
         </div>
