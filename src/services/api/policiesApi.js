@@ -1,46 +1,120 @@
 
-import MongoDBApiService from './mongodbApiService.js';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { API_CONFIG } from '../../config/api';
 
-/**
- * Policies API Service with MongoDB Integration
- */
-class PoliciesApiService extends MongoDBApiService {
+class PoliciesApiService {
   constructor() {
-    super(API_ENDPOINTS.POLICIES);
+    this.baseURL = `${API_CONFIG.BASE_URL}/policies`;
   }
 
+  async makeRequest(endpoint, options = {}) {
+    const token = localStorage.getItem('authToken');
+    
+    const defaultOptions = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      }
+    };
+
+    const config = { ...defaultOptions, ...options };
+    
+    try {
+      console.log(`Making request to: ${this.baseURL}${endpoint}`);
+      const response = await fetch(`${this.baseURL}${endpoint}`, config);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('API Response:', data);
+      return data;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
+  }
+
+  // Core CRUD operations
   async getPolicies(params = {}) {
-    return this.getAll(params);
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString ? `?${queryString}` : '';
+    return this.makeRequest(endpoint);
   }
 
-  async getPolicyById(policyId) {
-    return this.getById(policyId);
+  async getPolicyById(id) {
+    return this.makeRequest(`/${id}`);
   }
 
   async createPolicy(policyData) {
-    return this.create(policyData);
-  }
-
-  async updatePolicy(policyId, policyData) {
-    return this.update(policyId, policyData);
-  }
-
-  async deletePolicy(policyId) {
-    return this.delete(policyId);
-  }
-
-  async renewPolicy(policyId, renewalData) {
-    return this.makeRequest(`/${policyId}/renew`, {
+    return this.makeRequest('', {
       method: 'POST',
-      body: JSON.stringify(renewalData)
+      body: JSON.stringify(policyData)
     });
   }
 
-  async cancelPolicy(policyId, cancellationData) {
-    return this.makeRequest(`/${policyId}/cancel`, {
+  async updatePolicy(id, policyData) {
+    return this.makeRequest(`/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(policyData)
+    });
+  }
+
+  async deletePolicy(id) {
+    return this.makeRequest(`/${id}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // Statistics and analytics
+  async getPolicyStats() {
+    return this.makeRequest('/stats/summary');
+  }
+
+  async getExpiringPolicies(days = 30) {
+    return this.makeRequest(`/expiring/${days}`);
+  }
+
+  async getPoliciesDueForRenewal(days = 30) {
+    return this.makeRequest(`/renewals/due?days=${days}`);
+  }
+
+  // Search and filtering
+  async searchPolicies(query, limit = 10) {
+    return this.makeRequest(`/search/${encodeURIComponent(query)}?limit=${limit}`);
+  }
+
+  async getPoliciesByAgent(agentId) {
+    return this.makeRequest(`/agent/${agentId}`);
+  }
+
+  // Policy management
+  async assignPolicyToAgent(policyId, agentId) {
+    return this.makeRequest(`/${policyId}/assign`, {
+      method: 'PUT',
+      body: JSON.stringify({ agentId })
+    });
+  }
+
+  async bulkAssignPolicies(policyIds, agentId) {
+    return this.makeRequest('/bulk/assign', {
       method: 'POST',
-      body: JSON.stringify(cancellationData)
+      body: JSON.stringify({ policyIds, agentId })
+    });
+  }
+
+  // Document management
+  async uploadDocument(policyId, documentType, file, name) {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('documentType', documentType);
+    formData.append('name', name);
+
+    return this.makeRequest(`/${policyId}/documents`, {
+      method: 'POST',
+      body: formData,
+      headers: {} // Remove Content-Type to let browser set it for FormData
     });
   }
 
@@ -48,15 +122,48 @@ class PoliciesApiService extends MongoDBApiService {
     return this.makeRequest(`/${policyId}/documents`);
   }
 
-  async uploadPolicyDocument(policyId, documentData) {
-    return this.makeRequest(`/${policyId}/documents`, {
-      method: 'POST',
-      body: JSON.stringify(documentData)
+  async deleteDocument(policyId, documentId) {
+    return this.makeRequest(`/${policyId}/documents/${documentId}`, {
+      method: 'DELETE'
     });
   }
 
-  async getExpiringPolicies(days = 30) {
-    return this.makeRequest(`/expiring?days=${days}`);
+  // Payment management
+  async addPayment(policyId, paymentData) {
+    return this.makeRequest(`/${policyId}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(paymentData)
+    });
+  }
+
+  async getPaymentHistory(policyId) {
+    return this.makeRequest(`/${policyId}/payments`);
+  }
+
+  // Policy operations
+  async renewPolicy(policyId, renewalData) {
+    return this.makeRequest(`/${policyId}/renew`, {
+      method: 'POST',
+      body: JSON.stringify(renewalData)
+    });
+  }
+
+  async addNote(policyId, noteData) {
+    return this.makeRequest(`/${policyId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(noteData)
+    });
+  }
+
+  async getPolicyNotes(policyId) {
+    return this.makeRequest(`/${policyId}/notes`);
+  }
+
+  // Export functionality
+  async exportPolicies(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = `/export${queryString ? `?${queryString}` : ''}`;
+    return this.makeRequest(endpoint);
   }
 }
 

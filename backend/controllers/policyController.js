@@ -1,5 +1,7 @@
+
 const Policy = require('../models/Policy');
 const Client = require('../models/Client');
+const Agent = require('../models/Agent');
 const mongoose = require('mongoose');
 const { validationResult } = require('express-validator');
 
@@ -83,22 +85,43 @@ const getAllPolicies = async (req, res) => {
       limit: parseInt(limit),
       sort: sortOptions,
       populate: [
-        { path: 'clientId', select: 'displayName email clientId clientType' },
-        { path: 'assignedAgentId', select: 'name email' },
+        { path: 'clientId', select: 'displayName email clientId clientType individualData corporateData' },
+        { path: 'assignedAgentId', select: 'name email employeeId' },
         { path: 'createdBy', select: 'name email' }
       ]
     };
 
     const result = await Policy.paginate(filter, options);
 
+    // Transform data to match frontend expectations
+    const transformedData = result.docs.map(policy => ({
+      ...policy.toObject(),
+      id: policy._id,
+      client: {
+        id: policy.clientId?._id,
+        name: policy.clientId?.displayName || 'Unknown Client',
+        email: policy.clientId?.email,
+        clientId: policy.clientId?.clientId,
+        type: policy.clientId?.clientType
+      },
+      agent: policy.assignedAgentId ? {
+        id: policy.assignedAgentId._id,
+        name: policy.assignedAgentId.name,
+        email: policy.assignedAgentId.email,
+        employeeId: policy.assignedAgentId.employeeId
+      } : null
+    }));
+
     res.status(200).json({
       success: true,
-      data: result.docs,
+      data: transformedData,
       pagination: {
         currentPage: result.page,
         totalPages: result.totalPages,
         totalItems: result.totalDocs,
-        itemsPerPage: result.limit
+        itemsPerPage: result.limit,
+        hasNextPage: result.hasNextPage,
+        hasPrevPage: result.hasPrevPage
       }
     });
   } catch (error) {
@@ -132,8 +155,11 @@ const getPolicyById = async (req, res) => {
 
     const policy = await Policy.findOne(filter)
       .populate('clientId', 'displayName email clientId clientType individualData corporateData groupData')
-      .populate('assignedAgentId', 'name email')
-      .populate('createdBy', 'name email');
+      .populate('assignedAgentId', 'name email employeeId')
+      .populate('createdBy', 'name email')
+      .populate('documents.uploadedBy', 'name email')
+      .populate('payments.recordedBy', 'name email')
+      .populate('notes.addedBy', 'name email');
 
     if (!policy) {
       return res.status(404).json({
@@ -142,9 +168,28 @@ const getPolicyById = async (req, res) => {
       });
     }
 
+    // Transform data to match frontend expectations
+    const transformedPolicy = {
+      ...policy.toObject(),
+      id: policy._id,
+      client: {
+        id: policy.clientId?._id,
+        name: policy.clientId?.displayName || 'Unknown Client',
+        email: policy.clientId?.email,
+        clientId: policy.clientId?.clientId,
+        type: policy.clientId?.clientType
+      },
+      agent: policy.assignedAgentId ? {
+        id: policy.assignedAgentId._id,
+        name: policy.assignedAgentId.name,
+        email: policy.assignedAgentId.email,
+        employeeId: policy.assignedAgentId.employeeId
+      } : null
+    };
+
     res.status(200).json({
       success: true,
-      data: policy
+      data: transformedPolicy
     });
   } catch (error) {
     console.error('Error fetching policy:', error);
@@ -190,6 +235,17 @@ const createPolicy = async (req, res) => {
       }
     }
 
+    // Verify agent exists if specified
+    if (policyData.assignedAgentId) {
+      const agent = await Agent.findById(policyData.assignedAgentId);
+      if (!agent) {
+        return res.status(400).json({
+          success: false,
+          message: 'Assigned agent not found'
+        });
+      }
+    }
+
     // Create the policy
     const policy = new Policy(policyData);
     await policy.save();
@@ -197,14 +253,26 @@ const createPolicy = async (req, res) => {
     // Populate the created policy
     await policy.populate([
       { path: 'clientId', select: 'displayName email clientId clientType' },
-      { path: 'assignedAgentId', select: 'name email' },
+      { path: 'assignedAgentId', select: 'name email employeeId' },
       { path: 'createdBy', select: 'name email' }
     ]);
+
+    // Transform response
+    const transformedPolicy = {
+      ...policy.toObject(),
+      id: policy._id,
+      client: {
+        id: policy.clientId?._id,
+        name: policy.clientId?.displayName || 'Unknown Client',
+        email: policy.clientId?.email,
+        clientId: policy.clientId?.clientId
+      }
+    };
 
     res.status(201).json({
       success: true,
       message: 'Policy created successfully',
-      data: policy
+      data: transformedPolicy
     });
   } catch (error) {
     console.error('Error creating policy:', error);
@@ -279,7 +347,7 @@ const updatePolicy = async (req, res) => {
       { new: true, runValidators: true }
     ).populate([
       { path: 'clientId', select: 'displayName email clientId clientType' },
-      { path: 'assignedAgentId', select: 'name email' },
+      { path: 'assignedAgentId', select: 'name email employeeId' },
       { path: 'updatedBy', select: 'name email' }
     ]);
 
@@ -290,10 +358,22 @@ const updatePolicy = async (req, res) => {
       });
     }
 
+    // Transform response
+    const transformedPolicy = {
+      ...policy.toObject(),
+      id: policy._id,
+      client: {
+        id: policy.clientId?._id,
+        name: policy.clientId?.displayName || 'Unknown Client',
+        email: policy.clientId?.email,
+        clientId: policy.clientId?.clientId
+      }
+    };
+
     res.status(200).json({
       success: true,
       message: 'Policy updated successfully',
-      data: policy
+      data: transformedPolicy
     });
   } catch (error) {
     console.error('Error updating policy:', error);
@@ -736,32 +816,77 @@ const getPolicyStats = async (req, res) => {
       filter.assignedAgentId = req.user.id;
     }
 
-    const stats = await Policy.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: null,
-          totalPolicies: { $sum: 1 },
-          activePolicies: {
-            $sum: { $cond: [{ $eq: ['$status', 'Active'] }, 1, 0] }
-          },
-          expiredPolicies: {
-            $sum: { $cond: [{ $eq: ['$status', 'Expired'] }, 1, 0] }
-          },
-          totalPremium: { $sum: '$premium' },
-          averagePremium: { $avg: '$premium' }
+    const [stats, statusStats, typeStats] = await Promise.all([
+      Policy.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+            totalPolicies: { $sum: 1 },
+            activePolicies: {
+              $sum: { $cond: [{ $eq: ['$status', 'Active'] }, 1, 0] }
+            },
+            expiredPolicies: {
+              $sum: { $cond: [{ $eq: ['$status', 'Expired'] }, 1, 0] }
+            },
+            cancelledPolicies: {
+              $sum: { $cond: [{ $eq: ['$status', 'Cancelled'] }, 1, 0] }
+            },
+            totalPremium: { $sum: '$premium' },
+            totalSumAssured: { $sum: '$sumAssured' },
+            averagePremium: { $avg: '$premium' },
+            averageSumAssured: { $avg: '$sumAssured' }
+          }
         }
-      }
+      ]),
+      Policy.aggregate([
+        { $match: filter },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      Policy.aggregate([
+        { $match: filter },
+        { $group: { _id: '$type', count: { $sum: 1 } } }
+      ])
     ]);
+
+    const baseStats = stats[0] || {
+      totalPolicies: 0,
+      activePolicies: 0,
+      expiredPolicies: 0,
+      cancelledPolicies: 0,
+      totalPremium: 0,
+      totalSumAssured: 0,
+      averagePremium: 0,
+      averageSumAssured: 0
+    };
+
+    const statusBreakdown = statusStats.reduce((acc, item) => {
+      acc[item._id] = item.count;
+      return acc;
+    }, {});
+
+    const typeBreakdown = typeStats.reduce((acc, item) => {
+      acc[item._id] = item.count;
+      return acc;
+    }, {});
 
     res.status(200).json({
       success: true,
-      data: stats[0] || {
-        totalPolicies: 0,
-        activePolicies: 0,
-        expiredPolicies: 0,
-        totalPremium: 0,
-        averagePremium: 0
+      data: {
+        ...baseStats,
+        byStatus: statusBreakdown,
+        byType: typeBreakdown,
+        recentPolicies: await Policy.countDocuments({
+          ...filter,
+          createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+        }),
+        renewalsThisMonth: await Policy.countDocuments({
+          ...filter,
+          endDate: {
+            $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+            $lte: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
+          }
+        })
       }
     });
   } catch (error) {

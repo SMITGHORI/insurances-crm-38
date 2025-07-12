@@ -1,6 +1,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { policiesBackendApi } from '../services/api/policiesApiBackend';
+import { policiesApi } from '../services/api/policiesApi';
 import { toast } from 'sonner';
 
 // Query keys for policies
@@ -14,35 +14,73 @@ export const policiesQueryKeys = {
   payments: (id) => [...policiesQueryKeys.all, 'payments', id],
   notes: (id) => [...policiesQueryKeys.all, 'notes', id],
   stats: () => [...policiesQueryKeys.all, 'stats'],
+  expiring: (days) => [...policiesQueryKeys.all, 'expiring', days],
+  renewals: (days) => [...policiesQueryKeys.all, 'renewals', days],
 };
 
 // Get all policies with filters
 export const usePolicies = (params = {}) => {
   return useQuery({
-    queryKey: ['policies', params],
+    queryKey: policiesQueryKeys.list(params),
     queryFn: async () => {
       try {
         console.log('Fetching policies with params:', params);
-        const result = await policiesBackendApi.getPolicies(params);
+        const result = await policiesApi.getPolicies(params);
         console.log('Policies fetched successfully:', result);
-        return result;
+        
+        // Handle both paginated and non-paginated responses
+        if (result.success && result.data) {
+          return {
+            data: result.data,
+            pagination: result.pagination || null,
+            total: result.pagination?.totalItems || result.data.length
+          };
+        }
+        
+        return { data: [], pagination: null, total: 0 };
       } catch (error) {
         console.error('Error fetching policies:', error);
-        // Don't throw error, let it be handled by error state
+        toast.error('Failed to fetch policies');
         throw error;
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 1, // Only retry once on failure
+    retry: 1,
   });
 };
 
 // Get single policy by ID
 export const usePolicy = (id) => {
   return useQuery({
-    queryKey: ['policy', id],
-    queryFn: () => policiesBackendApi.getPolicyById(id),
+    queryKey: policiesQueryKeys.detail(id),
+    queryFn: async () => {
+      try {
+        const result = await policiesApi.getPolicyById(id);
+        return result.success ? result.data : result;
+      } catch (error) {
+        console.error('Error fetching policy:', error);
+        throw error;
+      }
+    },
     enabled: !!id,
+    retry: 1,
+  });
+};
+
+// Policy statistics
+export const usePolicyStats = () => {
+  return useQuery({
+    queryKey: policiesQueryKeys.stats(),
+    queryFn: async () => {
+      try {
+        const result = await policiesApi.getPolicyStats();
+        return result.success ? result.data : result;
+      } catch (error) {
+        console.error('Error fetching policy stats:', error);
+        throw error;
+      }
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes
     retry: 1,
   });
 };
@@ -52,13 +90,18 @@ export const useCreatePolicy = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: policiesBackendApi.createPolicy,
+    mutationFn: async (policyData) => {
+      const result = await policiesApi.createPolicy(policyData);
+      return result.success ? result.data : result;
+    },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['policies'] });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.all });
+      toast.success('Policy created successfully');
       console.log('Policy created successfully:', data);
     },
     onError: (error) => {
       console.error('Create policy error:', error);
+      toast.error(`Failed to create policy: ${error.message}`);
     }
   });
 };
@@ -68,14 +111,19 @@ export const useUpdatePolicy = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ id, policyData }) => policiesBackendApi.updatePolicy(id, policyData),
+    mutationFn: async ({ id, policyData }) => {
+      const result = await policiesApi.updatePolicy(id, policyData);
+      return result.success ? result.data : result;
+    },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['policies'] });
-      queryClient.invalidateQueries({ queryKey: ['policy', variables.id] });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.all });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.detail(variables.id) });
+      toast.success('Policy updated successfully');
       console.log('Policy updated successfully:', data);
     },
     onError: (error) => {
       console.error('Update policy error:', error);
+      toast.error(`Failed to update policy: ${error.message}`);
     }
   });
 };
@@ -85,13 +133,18 @@ export const useDeletePolicy = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: policiesBackendApi.deletePolicy,
+    mutationFn: async (id) => {
+      const result = await policiesApi.deletePolicy(id);
+      return result.success ? result.data : result;
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['policies'] });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.all });
+      toast.success('Policy deleted successfully');
       console.log('Policy deleted successfully');
     },
     onError: (error) => {
       console.error('Delete policy error:', error);
+      toast.error(`Failed to delete policy: ${error.message}`);
     }
   });
 };
@@ -99,7 +152,44 @@ export const useDeletePolicy = () => {
 // Search policies
 export const useSearchPolicies = () => {
   return useMutation({
-    mutationFn: ({ query, limit }) => policiesBackendApi.searchPolicies(query, limit),
+    mutationFn: async ({ query, limit }) => {
+      const result = await policiesApi.searchPolicies(query, limit);
+      return result.success ? result.data : result;
+    },
+  });
+};
+
+// Get expiring policies
+export const useExpiringPolicies = (days = 30) => {
+  return useQuery({
+    queryKey: policiesQueryKeys.expiring(days),
+    queryFn: async () => {
+      try {
+        const result = await policiesApi.getExpiringPolicies(days);
+        return result.success ? result.data : result;
+      } catch (error) {
+        console.error('Error fetching expiring policies:', error);
+        throw error;
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+// Get policies due for renewal
+export const usePoliciesDueForRenewal = (days = 30) => {
+  return useQuery({
+    queryKey: policiesQueryKeys.renewals(days),
+    queryFn: async () => {
+      try {
+        const result = await policiesApi.getPoliciesDueForRenewal(days);
+        return result.success ? result.data : result;
+      } catch (error) {
+        console.error('Error fetching renewal policies:', error);
+        throw error;
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
@@ -109,13 +199,15 @@ export const useUploadPolicyDocument = () => {
   
   return useMutation({
     mutationFn: ({ policyId, documentType, file, name }) => 
-      policiesBackendApi.uploadDocument(policyId, documentType, file, name),
+      policiesApi.uploadDocument(policyId, documentType, file, name),
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['policy', variables.policyId] });
-      queryClient.invalidateQueries({ queryKey: ['policyDocuments', variables.policyId] });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.detail(variables.policyId) });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.documents(variables.policyId) });
+      toast.success('Document uploaded successfully');
     },
     onError: (error) => {
       console.error('Upload document error:', error);
+      toast.error('Failed to upload document');
     }
   });
 };
@@ -123,26 +215,12 @@ export const useUploadPolicyDocument = () => {
 // Get policy documents
 export const usePolicyDocuments = (policyId) => {
   return useQuery({
-    queryKey: ['policyDocuments', policyId],
-    queryFn: () => policiesBackendApi.getPolicyDocuments(policyId),
-    enabled: !!policyId,
-  });
-};
-
-// Delete document mutation
-export const useDeletePolicyDocument = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: ({ policyId, documentId }) => 
-      policiesBackendApi.deleteDocument(policyId, documentId),
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['policy', variables.policyId] });
-      queryClient.invalidateQueries({ queryKey: ['policyDocuments', variables.policyId] });
+    queryKey: policiesQueryKeys.documents(policyId),
+    queryFn: async () => {
+      const result = await policiesApi.getPolicyDocuments(policyId);
+      return result.success ? result.data : result;
     },
-    onError: (error) => {
-      console.error('Delete document error:', error);
-    }
+    enabled: !!policyId,
   });
 };
 
@@ -152,13 +230,15 @@ export const useAddPayment = () => {
   
   return useMutation({
     mutationFn: ({ policyId, paymentData }) => 
-      policiesBackendApi.addPayment(policyId, paymentData),
+      policiesApi.addPayment(policyId, paymentData),
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['policy', variables.policyId] });
-      queryClient.invalidateQueries({ queryKey: ['paymentHistory', variables.policyId] });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.detail(variables.policyId) });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.payments(variables.policyId) });
+      toast.success('Payment record added successfully');
     },
     onError: (error) => {
       console.error('Add payment error:', error);
+      toast.error('Failed to add payment record');
     }
   });
 };
@@ -166,8 +246,11 @@ export const useAddPayment = () => {
 // Get payment history
 export const usePaymentHistory = (policyId) => {
   return useQuery({
-    queryKey: ['paymentHistory', policyId],
-    queryFn: () => policiesBackendApi.getPaymentHistory(policyId),
+    queryKey: policiesQueryKeys.payments(policyId),
+    queryFn: async () => {
+      const result = await policiesApi.getPaymentHistory(policyId);
+      return result.success ? result.data : result;
+    },
     enabled: !!policyId,
   });
 };
@@ -178,13 +261,15 @@ export const useRenewPolicy = () => {
   
   return useMutation({
     mutationFn: ({ policyId, renewalData }) => 
-      policiesBackendApi.renewPolicy(policyId, renewalData),
+      policiesApi.renewPolicy(policyId, renewalData),
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['policy', variables.policyId] });
-      queryClient.invalidateQueries({ queryKey: ['policies'] });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.detail(variables.policyId) });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.all });
+      toast.success('Policy renewed successfully');
     },
     onError: (error) => {
       console.error('Renew policy error:', error);
+      toast.error('Failed to renew policy');
     }
   });
 };
@@ -195,13 +280,15 @@ export const useAddPolicyNote = () => {
   
   return useMutation({
     mutationFn: ({ policyId, noteData }) => 
-      policiesBackendApi.addNote(policyId, noteData),
+      policiesApi.addNote(policyId, noteData),
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['policy', variables.policyId] });
-      queryClient.invalidateQueries({ queryKey: ['policyNotes', variables.policyId] });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.detail(variables.policyId) });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.notes(variables.policyId) });
+      toast.success('Note added successfully');
     },
     onError: (error) => {
       console.error('Add note error:', error);
+      toast.error('Failed to add note');
     }
   });
 };
@@ -209,49 +296,26 @@ export const useAddPolicyNote = () => {
 // Get policy notes
 export const usePolicyNotes = (policyId) => {
   return useQuery({
-    queryKey: ['policyNotes', policyId],
-    queryFn: () => policiesBackendApi.getPolicyNotes(policyId),
+    queryKey: policiesQueryKeys.notes(policyId),
+    queryFn: async () => {
+      const result = await policiesApi.getPolicyNotes(policyId);
+      return result.success ? result.data : result;
+    },
     enabled: !!policyId,
-  });
-};
-
-// Get policy statistics
-export const usePolicyStats = () => {
-  return useQuery({
-    queryKey: ['policyStats'],
-    queryFn: () => policiesBackendApi.getPolicyStats(),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    retry: 1,
-  });
-};
-
-// Get expiring policies
-export const useExpiringPolicies = (days = 30) => {
-  return useQuery({
-    queryKey: ['expiringPolicies', days],
-    queryFn: () => policiesBackendApi.getExpiringPolicies(days),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-};
-
-// Get policies due for renewal
-export const usePoliciesDueForRenewal = (days = 30) => {
-  return useQuery({
-    queryKey: ['policiesDueForRenewal', days],
-    queryFn: () => policiesBackendApi.getPoliciesDueForRenewal(days),
-    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 // Export policies
 export const useExportPolicies = () => {
   return useMutation({
-    mutationFn: policiesBackendApi.exportPolicies,
+    mutationFn: (filters) => policiesApi.exportPolicies(filters),
     onSuccess: () => {
+      toast.success('Policies exported successfully');
       console.log('Policies exported successfully');
     },
     onError: (error) => {
       console.error('Export policies error:', error);
+      toast.error('Failed to export policies');
     }
   });
 };
@@ -262,13 +326,15 @@ export const useAssignPolicy = () => {
   
   return useMutation({
     mutationFn: ({ policyId, agentId }) => 
-      policiesBackendApi.assignPolicyToAgent(policyId, agentId),
+      policiesApi.assignPolicyToAgent(policyId, agentId),
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['policies'] });
-      queryClient.invalidateQueries({ queryKey: ['policy', variables.policyId] });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.all });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.detail(variables.policyId) });
+      toast.success('Policy assigned successfully');
     },
     onError: (error) => {
       console.error('Assign policy error:', error);
+      toast.error('Failed to assign policy');
     }
   });
 };
@@ -279,12 +345,14 @@ export const useBulkAssignPolicies = () => {
   
   return useMutation({
     mutationFn: ({ policyIds, agentId }) => 
-      policiesBackendApi.bulkAssignPolicies(policyIds, agentId),
+      policiesApi.bulkAssignPolicies(policyIds, agentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['policies'] });
+      queryClient.invalidateQueries({ queryKey: policiesQueryKeys.all });
+      toast.success('Policies assigned successfully');
     },
     onError: (error) => {
       console.error('Bulk assign policies error:', error);
+      toast.error('Failed to assign policies');
     }
   });
 };

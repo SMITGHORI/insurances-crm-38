@@ -1,24 +1,25 @@
 
 import React from 'react';
-import { FileText, TrendingUp, AlertTriangle, DollarSign, Calendar, Shield } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { usePolicyStats, useExpiringPolicies } from '../../hooks/usePolicyFeatures';
+import { usePolicyStats, useExpiringPolicies } from '@/hooks/usePolicies';
+import { FileText, TrendingUp, AlertTriangle, Users, DollarSign, Calendar } from 'lucide-react';
 
 const PolicyStatsCards = () => {
   const { data: stats, isLoading: statsLoading } = usePolicyStats();
   const { data: expiringPolicies, isLoading: expiringLoading } = useExpiringPolicies(30);
 
-  if (statsLoading) {
+  const loading = statsLoading || expiringLoading;
+
+  if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Card key={i} className="animate-pulse">
-            <CardHeader className="pb-2">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-6 mb-4 sm:mb-6">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Card key={index} className="animate-pulse">
+            <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+              <CardTitle className="h-4 bg-gray-200 rounded"></CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+            <CardContent className="px-3 sm:px-6 pt-0">
+              <div className="h-8 bg-gray-200 rounded"></div>
             </CardContent>
           </Card>
         ))}
@@ -26,79 +27,112 @@ const PolicyStatsCards = () => {
     );
   }
 
-  const statsData = [
-    {
-      title: 'Total Policies',
-      value: stats?.totalPolicies || 0,
-      icon: FileText,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
-    },
-    {
-      title: 'Active Policies',
-      value: stats?.activePolicies || 0,
-      icon: Shield,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50'
-    },
-    {
-      title: 'Expiring Soon',
-      value: expiringPolicies?.length || 0,
-      icon: AlertTriangle,
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-50',
-      badge: expiringPolicies?.length > 0 ? 'urgent' : null
-    },
-    {
-      title: 'Total Premium',
-      value: stats?.totalPremium ? `₹${(stats.totalPremium / 1000000).toFixed(1)}M` : '₹0',
-      icon: DollarSign,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
-    },
-    {
-      title: 'This Month',
-      value: stats?.renewalsThisMonth || 0,
-      icon: Calendar,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50'
-    },
-    {
-      title: 'Average Premium',
-      value: stats?.averagePremium ? `₹${stats.averagePremium.toLocaleString()}` : '₹0',
-      icon: TrendingUp,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50'
-    }
-  ];
+  const statsData = stats || {};
+  const expiringCount = expiringPolicies?.length || 0;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-      {statsData.map((stat, index) => (
-        <Card key={index} className="hover:shadow-md transition-shadow relative">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              {stat.title}
-            </CardTitle>
-            <div className={`p-2 rounded-full ${stat.bgColor} relative`}>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-              {stat.badge === 'urgent' && (
-                <Badge variant="destructive" className="absolute -top-1 -right-1 px-1 py-0 text-xs">
-                  !
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-            {stats?.growth && index === 0 && (
-              <p className="text-xs text-green-600">
-                +{stats.growth}% from last month
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-6 mb-4 sm:mb-6">
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+          <CardTitle className="text-xs sm:text-sm font-medium text-gray-500 flex items-center">
+            <FileText className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+            Total Policies
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-6 pt-0">
+          <div className="text-lg sm:text-2xl font-bold text-gray-900">
+            {statsData.totalPolicies || 0}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            All policies in system
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+          <CardTitle className="text-xs sm:text-sm font-medium text-gray-500 flex items-center">
+            <TrendingUp className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+            Active Policies
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-6 pt-0">
+          <div className="text-lg sm:text-2xl font-bold text-green-600">
+            {statsData.activePolicies || 0}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Currently active
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+          <CardTitle className="text-xs sm:text-sm font-medium text-gray-500 flex items-center">
+            <AlertTriangle className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+            Expiring Soon
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-6 pt-0">
+          <div className="text-lg sm:text-2xl font-bold text-orange-600">
+            {expiringCount}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Next 30 days
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+          <CardTitle className="text-xs sm:text-sm font-medium text-gray-500 flex items-center">
+            <Users className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+            Expired
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-6 pt-0">
+          <div className="text-lg sm:text-2xl font-bold text-red-600">
+            {statsData.expiredPolicies || 0}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Need renewal
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+          <CardTitle className="text-xs sm:text-sm font-medium text-gray-500 flex items-center">
+            <DollarSign className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+            Total Premium
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-6 pt-0">
+          <div className="text-lg sm:text-2xl font-bold text-blue-600">
+            ₹{((statsData.totalPremium || 0) / 100000).toFixed(1)}L
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Annual value
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+          <CardTitle className="text-xs sm:text-sm font-medium text-gray-500 flex items-center">
+            <Calendar className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+            Recent
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-6 pt-0">
+          <div className="text-lg sm:text-2xl font-bold text-purple-600">
+            {statsData.recentPolicies || 0}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Last 30 days
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 };
