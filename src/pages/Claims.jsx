@@ -1,21 +1,20 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, Download, FileUp } from 'lucide-react';
+import { Plus, Download, BarChart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ClaimsTable from '@/components/claims/ClaimsTable';
 import { useIsMobile } from '@/hooks/use-mobile';
 import ClaimFilters from '@/components/claims/ClaimFilters';
 import { toast } from 'sonner';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
-import ClaimStatsCards from '@/components/claims/ClaimStatsCards';
 import BulkOperationsToolbar from '@/components/claims/BulkOperationsToolbar';
 import ClaimsReports from '@/components/claims/ClaimsReports';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { BarChart } from 'lucide-react';
 import Protected from '@/components/Protected';
 import { useClaims, useExportClaims } from '../hooks/useClaims';
 import ClaimCreateForm from '@/components/claims/ClaimCreateForm';
+import ClaimStatsCards from '@/components/claims/ClaimStatsCards';
 
 const Claims = () => {
   const navigate = useNavigate();

@@ -1,17 +1,15 @@
 
 const Claim = require('../models/Claim');
-const Policy = require('../models/Policy');
 const Client = require('../models/Client');
+const Policy = require('../models/Policy');
 const User = require('../models/User');
-const { validationResult } = require('express-validator');
 const mongoose = require('mongoose');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs').promises;
 
 /**
- * Get all claims with advanced filtering and pagination
+ * Enhanced Claims Controller with comprehensive MongoDB operations
  */
+
+// Get all claims with advanced filtering and pagination
 const getAllClaims = async (req, res) => {
   try {
     const {
@@ -33,79 +31,62 @@ const getAllClaims = async (req, res) => {
     } = req.query;
 
     // Build filter conditions
-    const filterConditions = { isDeleted: { $ne: true } };
+    const filter = { isDeleted: { $ne: true } };
 
     // Role-based filtering
     if (req.user.role === 'agent') {
-      filterConditions.assignedTo = req.user._id;
+      filter.assignedTo = req.user._id;
     }
 
     // Apply filters
     if (search) {
-      filterConditions.$text = { $search: search };
+      filter.$or = [
+        { claimNumber: new RegExp(search, 'i') },
+        { description: new RegExp(search, 'i') }
+      ];
     }
 
-    if (status && status !== 'all') {
-      filterConditions.status = status;
-    }
+    if (status && status !== 'all') filter.status = status;
+    if (claimType && claimType !== 'all') filter.claimType = claimType;
+    if (priority) filter.priority = priority;
+    if (assignedTo) filter.assignedTo = assignedTo;
+    if (clientId) filter.clientId = clientId;
+    if (policyId) filter.policyId = policyId;
 
-    if (claimType && claimType !== 'all') {
-      filterConditions.claimType = claimType;
-    }
-
-    if (priority) {
-      filterConditions.priority = priority;
-    }
-
-    if (assignedTo) {
-      filterConditions.assignedTo = assignedTo;
-    }
-
-    if (clientId) {
-      filterConditions.clientId = clientId;
-    }
-
-    if (policyId) {
-      filterConditions.policyId = policyId;
-    }
-
-    // Amount range filter
+    // Amount range filters
     if (minAmount || maxAmount) {
-      filterConditions.claimAmount = {};
-      if (minAmount) filterConditions.claimAmount.$gte = parseFloat(minAmount);
-      if (maxAmount) filterConditions.claimAmount.$lte = parseFloat(maxAmount);
+      filter.claimAmount = {};
+      if (minAmount) filter.claimAmount.$gte = parseFloat(minAmount);
+      if (maxAmount) filter.claimAmount.$lte = parseFloat(maxAmount);
     }
 
-    // Date range filter
+    // Date range filters
     if (dateFrom || dateTo) {
-      filterConditions.reportedDate = {};
-      if (dateFrom) filterConditions.reportedDate.$gte = new Date(dateFrom);
-      if (dateTo) filterConditions.reportedDate.$lte = new Date(dateTo);
+      filter.reportedDate = {};
+      if (dateFrom) filter.reportedDate.$gte = new Date(dateFrom);
+      if (dateTo) filter.reportedDate.$lte = new Date(dateTo);
     }
 
-    // Pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    // Sort configuration
     const sortOptions = {};
-    sortOptions[sortField] = sortDirection === 'desc' ? -1 : 1;
+    sortOptions[sortField] = sortDirection === 'asc' ? 1 : -1;
 
-    // Execute query
-    const [claims, totalClaims] = await Promise.all([
-      Claim.find(filterConditions)
-        .populate('clientId', 'firstName lastName email phone')
-        .populate('policyId', 'policyNumber policyType coverage')
+    // Execute query with pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const [claims, totalItems] = await Promise.all([
+      Claim.find(filter)
+        .populate('clientId', 'firstName lastName email phoneNumber')
+        .populate('policyId', 'policyNumber policyType premiumAmount')
         .populate('assignedTo', 'firstName lastName email')
-        .populate('createdBy', 'firstName lastName')
         .sort(sortOptions)
         .skip(skip)
         .limit(parseInt(limit))
         .lean(),
-      Claim.countDocuments(filterConditions)
+      Claim.countDocuments(filter)
     ]);
 
-    // Calculate pagination metadata
-    const totalPages = Math.ceil(totalClaims / parseInt(limit));
-    const hasNextPage = parseInt(page) < totalPages;
-    const hasPrevPage = parseInt(page) > 1;
+    const totalPages = Math.ceil(totalItems / parseInt(limit));
 
     res.json({
       success: true,
@@ -113,16 +94,16 @@ const getAllClaims = async (req, res) => {
       pagination: {
         currentPage: parseInt(page),
         totalPages,
-        totalItems: totalClaims,
+        totalItems,
         itemsPerPage: parseInt(limit),
-        hasNextPage,
-        hasPrevPage
+        hasNextPage: parseInt(page) < totalPages,
+        hasPrevPage: parseInt(page) > 1
       },
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error fetching claims:', error);
+    console.error('Get all claims error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch claims',
@@ -132,9 +113,7 @@ const getAllClaims = async (req, res) => {
   }
 };
 
-/**
- * Get a single claim by ID
- */
+// Get single claim by ID
 const getClaimById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -147,12 +126,14 @@ const getClaimById = async (req, res) => {
       });
     }
 
-    const claim = await Claim.findOne({ _id: id, isDeleted: { $ne: true } })
-      .populate('clientId', 'firstName lastName email phone address')
-      .populate('policyId', 'policyNumber policyType coverage premium deductible')
-      .populate('assignedTo', 'firstName lastName email department')
-      .populate('createdBy', 'firstName lastName email')
-      .populate('updatedBy', 'firstName lastName email')
+    const claim = await Claim.findOne({ 
+      _id: id, 
+      isDeleted: { $ne: true } 
+    })
+      .populate('clientId', 'firstName lastName email phoneNumber address')
+      .populate('policyId', 'policyNumber policyType premiumAmount coverageAmount')
+      .populate('assignedTo', 'firstName lastName email')
+      .populate('documents.uploadedBy', 'firstName lastName')
       .populate('notes.createdBy', 'firstName lastName')
       .populate('timeline.createdBy', 'firstName lastName')
       .lean();
@@ -165,11 +146,11 @@ const getClaimById = async (req, res) => {
       });
     }
 
-    // Role-based access control
+    // Check ownership for agents
     if (req.user.role === 'agent' && claim.assignedTo._id.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. You can only view your assigned claims.',
+        message: 'Access denied',
         timestamp: new Date().toISOString()
       });
     }
@@ -181,7 +162,7 @@ const getClaimById = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching claim:', error);
+    console.error('Get claim by ID error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch claim',
@@ -191,24 +172,26 @@ const getClaimById = async (req, res) => {
   }
 };
 
-/**
- * Create a new claim
- */
+// Create new claim
 const createClaim = async (req, res) => {
   try {
-    // Validate request
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array(),
-        timestamp: new Date().toISOString()
-      });
-    }
+    const claimData = {
+      ...req.body,
+      createdBy: req.user._id,
+      updatedBy: req.user._id
+    };
 
-    const claimData = req.body;
-    claimData.createdBy = req.user._id;
+    // Validate required fields
+    const requiredFields = ['clientId', 'policyId', 'claimType', 'claimAmount', 'incidentDate', 'description', 'assignedTo'];
+    for (const field of requiredFields) {
+      if (!claimData[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `${field} is required`,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
 
     // Verify client and policy exist
     const [client, policy] = await Promise.all([
@@ -232,44 +215,25 @@ const createClaim = async (req, res) => {
       });
     }
 
-    // Verify policy belongs to client
-    if (policy.clientId.toString() !== claimData.clientId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Policy does not belong to the selected client',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Check if claim amount exceeds policy coverage
-    if (claimData.claimAmount > policy.coverage.totalCoverage) {
-      return res.status(400).json({
-        success: false,
-        message: 'Claim amount exceeds policy coverage limit',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Create the claim
     const claim = new Claim(claimData);
     await claim.save();
 
-    // Populate the created claim
-    const populatedClaim = await Claim.findById(claim._id)
-      .populate('clientId', 'firstName lastName email')
-      .populate('policyId', 'policyNumber policyType')
-      .populate('assignedTo', 'firstName lastName email')
-      .populate('createdBy', 'firstName lastName');
+    // Populate the response
+    await claim.populate([
+      { path: 'clientId', select: 'firstName lastName email' },
+      { path: 'policyId', select: 'policyNumber policyType' },
+      { path: 'assignedTo', select: 'firstName lastName email' }
+    ]);
 
     res.status(201).json({
       success: true,
       message: 'Claim created successfully',
-      data: populatedClaim,
+      data: claim,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error creating claim:', error);
+    console.error('Create claim error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create claim',
@@ -279,13 +243,14 @@ const createClaim = async (req, res) => {
   }
 };
 
-/**
- * Update an existing claim
- */
+// Update claim
 const updateClaim = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = {
+      ...req.body,
+      updatedBy: req.user._id
+    };
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -295,18 +260,14 @@ const updateClaim = async (req, res) => {
       });
     }
 
-    // Validate request
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array(),
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    const claim = await Claim.findOne({ _id: id, isDeleted: { $ne: true } });
+    const claim = await Claim.findOneAndUpdate(
+      { _id: id, isDeleted: { $ne: true } },
+      updateData,
+      { new: true, runValidators: true }
+    )
+      .populate('clientId', 'firstName lastName email')
+      .populate('policyId', 'policyNumber policyType')
+      .populate('assignedTo', 'firstName lastName email');
 
     if (!claim) {
       return res.status(404).json({
@@ -316,37 +277,15 @@ const updateClaim = async (req, res) => {
       });
     }
 
-    // Role-based access control
-    if (req.user.role === 'agent' && claim.assignedTo.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. You can only update your assigned claims.',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    updateData.updatedBy = req.user._id;
-
-    // Update the claim
-    const updatedClaim = await Claim.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    )
-      .populate('clientId', 'firstName lastName email')
-      .populate('policyId', 'policyNumber policyType')
-      .populate('assignedTo', 'firstName lastName email')
-      .populate('updatedBy', 'firstName lastName');
-
     res.json({
       success: true,
       message: 'Claim updated successfully',
-      data: updatedClaim,
+      data: claim,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error updating claim:', error);
+    console.error('Update claim error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update claim',
@@ -356,9 +295,7 @@ const updateClaim = async (req, res) => {
   }
 };
 
-/**
- * Delete a claim (soft delete)
- */
+// Delete claim (soft delete)
 const deleteClaim = async (req, res) => {
   try {
     const { id } = req.params;
@@ -371,8 +308,7 @@ const deleteClaim = async (req, res) => {
       });
     }
 
-    const claim = await Claim.findOne({ _id: id, isDeleted: { $ne: true } });
-
+    const claim = await Claim.findById(id);
     if (!claim) {
       return res.status(404).json({
         success: false,
@@ -381,7 +317,6 @@ const deleteClaim = async (req, res) => {
       });
     }
 
-    // Soft delete the claim
     await claim.softDelete(req.user._id);
 
     res.json({
@@ -391,7 +326,7 @@ const deleteClaim = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error deleting claim:', error);
+    console.error('Delete claim error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete claim',
@@ -401,26 +336,31 @@ const deleteClaim = async (req, res) => {
   }
 };
 
-/**
- * Update claim status
- */
+// Update claim status
 const updateClaimStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status, reason, approvedAmount } = req.body;
 
-    // Validate request
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
-        errors: errors.array(),
+        message: 'Invalid claim ID format',
         timestamp: new Date().toISOString()
       });
     }
 
-    const claim = await Claim.findOne({ _id: id, isDeleted: { $ne: true } });
+    const updateData = { status, updatedBy: req.user._id };
+    if (approvedAmount !== undefined) updateData.approvedAmount = approvedAmount;
+
+    const claim = await Claim.findOneAndUpdate(
+      { _id: id, isDeleted: { $ne: true } },
+      updateData,
+      { new: true, runValidators: true }
+    )
+      .populate('clientId', 'firstName lastName email')
+      .populate('policyId', 'policyNumber policyType')
+      .populate('assignedTo', 'firstName lastName email');
 
     if (!claim) {
       return res.status(404).json({
@@ -430,35 +370,23 @@ const updateClaimStatus = async (req, res) => {
       });
     }
 
-    // Update status
-    claim.status = status;
-    if (approvedAmount !== undefined) {
-      claim.approvedAmount = approvedAmount;
-    }
-    claim.updatedBy = req.user._id;
-
     // Add timeline event
     await claim.addTimelineEvent(
       `Status changed to ${status}`,
-      reason || `Claim status updated to ${status}`,
+      reason || 'Status updated',
       status.toLowerCase().replace(' ', '_'),
       req.user._id
     );
 
-    const updatedClaim = await Claim.findById(id)
-      .populate('clientId', 'firstName lastName email')
-      .populate('policyId', 'policyNumber policyType')
-      .populate('assignedTo', 'firstName lastName email');
-
     res.json({
       success: true,
       message: 'Claim status updated successfully',
-      data: updatedClaim,
+      data: claim,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error updating claim status:', error);
+    console.error('Update claim status error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update claim status',
@@ -468,27 +396,21 @@ const updateClaimStatus = async (req, res) => {
   }
 };
 
-/**
- * Add note to claim
- */
+// Add note to claim
 const addNote = async (req, res) => {
   try {
     const { id } = req.params;
-    const { content, type, priority } = req.body;
+    const { content, type = 'internal', priority = 'normal' } = req.body;
 
-    // Validate request
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
-        errors: errors.array(),
+        message: 'Invalid claim ID format',
         timestamp: new Date().toISOString()
       });
     }
 
     const claim = await Claim.findOne({ _id: id, isDeleted: { $ne: true } });
-
     if (!claim) {
       return res.status(404).json({
         success: false,
@@ -497,7 +419,6 @@ const addNote = async (req, res) => {
       });
     }
 
-    // Add note
     await claim.addNote(content, type, priority, req.user._id);
 
     res.json({
@@ -507,7 +428,7 @@ const addNote = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error adding note:', error);
+    console.error('Add note error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to add note',
@@ -517,12 +438,18 @@ const addNote = async (req, res) => {
   }
 };
 
-/**
- * Get claim notes
- */
+// Get claim notes
 const getClaimNotes = async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid claim ID format',
+        timestamp: new Date().toISOString()
+      });
+    }
 
     const claim = await Claim.findOne({ _id: id, isDeleted: { $ne: true } })
       .populate('notes.createdBy', 'firstName lastName')
@@ -538,12 +465,12 @@ const getClaimNotes = async (req, res) => {
 
     res.json({
       success: true,
-      data: claim.notes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+      data: claim.notes,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error fetching claim notes:', error);
+    console.error('Get claim notes error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch claim notes',
@@ -553,169 +480,7 @@ const getClaimNotes = async (req, res) => {
   }
 };
 
-/**
- * Upload claim document
- */
-const uploadDocument = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { documentType, name } = req.body;
-
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No file uploaded',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    const claim = await Claim.findOne({ _id: id, isDeleted: { $ne: true } });
-
-    if (!claim) {
-      return res.status(404).json({
-        success: false,
-        message: 'Claim not found',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Create document object
-    const document = {
-      name: name || req.file.originalname,
-      fileName: req.file.filename,
-      fileSize: req.file.size,
-      mimeType: req.file.mimetype,
-      documentType,
-      filePath: req.file.path,
-      uploadedBy: req.user._id,
-      uploadedAt: new Date()
-    };
-
-    claim.documents.push(document);
-    await claim.save();
-
-    // Add timeline event
-    await claim.addTimelineEvent(
-      'Document uploaded',
-      `Document "${document.name}" uploaded`,
-      'document_uploaded',
-      req.user._id
-    );
-
-    res.json({
-      success: true,
-      message: 'Document uploaded successfully',
-      data: document,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error uploading document:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to upload document',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-};
-
-/**
- * Get claim documents
- */
-const getClaimDocuments = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const claim = await Claim.findOne({ _id: id, isDeleted: { $ne: true } })
-      .populate('documents.uploadedBy', 'firstName lastName')
-      .select('documents');
-
-    if (!claim) {
-      return res.status(404).json({
-        success: false,
-        message: 'Claim not found',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    res.json({
-      success: true,
-      data: claim.documents.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)),
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error fetching claim documents:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch claim documents',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-};
-
-/**
- * Delete claim document
- */
-const deleteDocument = async (req, res) => {
-  try {
-    const { id, documentId } = req.params;
-
-    const claim = await Claim.findOne({ _id: id, isDeleted: { $ne: true } });
-
-    if (!claim) {
-      return res.status(404).json({
-        success: false,
-        message: 'Claim not found',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    const documentIndex = claim.documents.findIndex(doc => doc._id.toString() === documentId);
-
-    if (documentIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        message: 'Document not found',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    const document = claim.documents[documentIndex];
-
-    // Delete file from filesystem
-    try {
-      await fs.unlink(document.filePath);
-    } catch (fileError) {
-      console.warn('File not found on filesystem:', document.filePath);
-    }
-
-    // Remove document from array
-    claim.documents.splice(documentIndex, 1);
-    await claim.save();
-
-    res.json({
-      success: true,
-      message: 'Document deleted successfully',
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error deleting document:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete document',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-};
-
-/**
- * Search claims
- */
+// Search claims
 const searchClaims = async (req, res) => {
   try {
     const { query } = req.params;
@@ -729,7 +494,7 @@ const searchClaims = async (req, res) => {
       });
     }
 
-    const searchConditions = {
+    const searchFilter = {
       isDeleted: { $ne: true },
       $or: [
         { claimNumber: new RegExp(query, 'i') },
@@ -740,25 +505,25 @@ const searchClaims = async (req, res) => {
 
     // Role-based filtering
     if (req.user.role === 'agent') {
-      searchConditions.assignedTo = req.user._id;
+      searchFilter.assignedTo = req.user._id;
     }
 
-    const claims = await Claim.find(searchConditions)
+    const claims = await Claim.find(searchFilter)
       .populate('clientId', 'firstName lastName email')
       .populate('policyId', 'policyNumber policyType')
-      .populate('assignedTo', 'firstName lastName email')
+      .populate('assignedTo', 'firstName lastName')
       .limit(parseInt(limit))
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       success: true,
       data: claims,
-      count: claims.length,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error searching claims:', error);
+    console.error('Search claims error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to search claims',
@@ -768,16 +533,13 @@ const searchClaims = async (req, res) => {
   }
 };
 
-/**
- * Get claims statistics
- */
+// Get claims statistics
 const getClaimsStats = async (req, res) => {
   try {
     const { period = 'month', startDate, endDate } = req.query;
 
+    // Build date filter
     let dateFilter = {};
-    const now = new Date();
-
     if (startDate && endDate) {
       dateFilter = {
         reportedDate: {
@@ -786,33 +548,25 @@ const getClaimsStats = async (req, res) => {
         }
       };
     } else {
+      // Default period filtering
+      const now = new Date();
+      let periodStart;
+      
       switch (period) {
         case 'day':
-          dateFilter = {
-            reportedDate: {
-              $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate())
-            }
-          };
+          periodStart = new Date(now.setHours(0, 0, 0, 0));
           break;
         case 'week':
-          const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
-          dateFilter = { reportedDate: { $gte: weekStart } };
-          break;
-        case 'month':
-          dateFilter = {
-            reportedDate: {
-              $gte: new Date(now.getFullYear(), now.getMonth(), 1)
-            }
-          };
+          periodStart = new Date(now.setDate(now.getDate() - 7));
           break;
         case 'year':
-          dateFilter = {
-            reportedDate: {
-              $gte: new Date(now.getFullYear(), 0, 1)
-            }
-          };
+          periodStart = new Date(now.setFullYear(now.getFullYear() - 1));
           break;
+        default: // month
+          periodStart = new Date(now.setMonth(now.getMonth() - 1));
       }
+      
+      dateFilter = { reportedDate: { $gte: periodStart } };
     }
 
     const baseFilter = { isDeleted: { $ne: true }, ...dateFilter };
@@ -824,15 +578,27 @@ const getClaimsStats = async (req, res) => {
 
     const [
       totalClaims,
-      statusStats,
-      typeStats,
-      priorityStats,
-      amountStats
+      pendingClaims,
+      approvedClaims,
+      rejectedClaims,
+      settledClaims,
+      totalClaimAmount,
+      totalApprovedAmount,
+      claimsByType,
+      claimsByPriority
     ] = await Promise.all([
       Claim.countDocuments(baseFilter),
+      Claim.countDocuments({ ...baseFilter, status: { $in: ['Reported', 'Under Review', 'Pending'] } }),
+      Claim.countDocuments({ ...baseFilter, status: 'Approved' }),
+      Claim.countDocuments({ ...baseFilter, status: 'Rejected' }),
+      Claim.countDocuments({ ...baseFilter, status: 'Settled' }),
       Claim.aggregate([
         { $match: baseFilter },
-        { $group: { _id: '$status', count: { $sum: 1 } } }
+        { $group: { _id: null, total: { $sum: '$claimAmount' } } }
+      ]),
+      Claim.aggregate([
+        { $match: { ...baseFilter, approvedAmount: { $gt: 0 } } },
+        { $group: { _id: null, total: { $sum: '$approvedAmount' } } }
       ]),
       Claim.aggregate([
         { $match: baseFilter },
@@ -841,17 +607,6 @@ const getClaimsStats = async (req, res) => {
       Claim.aggregate([
         { $match: baseFilter },
         { $group: { _id: '$priority', count: { $sum: 1 } } }
-      ]),
-      Claim.aggregate([
-        { $match: baseFilter },
-        {
-          $group: {
-            _id: null,
-            totalAmount: { $sum: '$claimAmount' },
-            totalApproved: { $sum: '$approvedAmount' },
-            avgAmount: { $avg: '$claimAmount' }
-          }
-        }
       ])
     ]);
 
@@ -859,16 +614,22 @@ const getClaimsStats = async (req, res) => {
       success: true,
       data: {
         totalClaims,
-        statusStats,
-        typeStats,
-        priorityStats,
-        amountStats: amountStats[0] || { totalAmount: 0, totalApproved: 0, avgAmount: 0 }
+        pendingClaims,
+        approvedClaims,
+        rejectedClaims,
+        settledClaims,
+        totalClaimAmount: totalClaimAmount[0]?.total || 0,
+        totalApprovedAmount: totalApprovedAmount[0]?.total || 0,
+        claimsByType,
+        claimsByPriority,
+        period,
+        dateRange: dateFilter.reportedDate
       },
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error fetching claims stats:', error);
+    console.error('Get claims stats error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch claims statistics',
@@ -878,9 +639,7 @@ const getClaimsStats = async (req, res) => {
   }
 };
 
-/**
- * Get dashboard statistics
- */
+// Get dashboard statistics
 const getDashboardStats = async (req, res) => {
   try {
     const baseFilter = { isDeleted: { $ne: true } };
@@ -892,37 +651,42 @@ const getDashboardStats = async (req, res) => {
 
     const [
       totalClaims,
-      pendingClaims,
-      approvedClaims,
-      rejectedClaims,
-      recentClaims
+      activeClaims,
+      pendingApproval,
+      recentClaims,
+      highPriorityClaims,
+      overdueEstimates
     ] = await Promise.all([
       Claim.countDocuments(baseFilter),
-      Claim.countDocuments({ ...baseFilter, status: { $in: ['Reported', 'Under Review', 'Pending'] } }),
-      Claim.countDocuments({ ...baseFilter, status: 'Approved' }),
-      Claim.countDocuments({ ...baseFilter, status: 'Rejected' }),
-      Claim.find(baseFilter)
-        .populate('clientId', 'firstName lastName')
-        .populate('assignedTo', 'firstName lastName')
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .select('claimNumber status claimAmount reportedDate')
+      Claim.countDocuments({ ...baseFilter, status: { $nin: ['Settled', 'Closed', 'Rejected'] } }),
+      Claim.countDocuments({ ...baseFilter, status: { $in: ['Pending', 'Under Review'] } }),
+      Claim.countDocuments({ 
+        ...baseFilter, 
+        reportedDate: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } 
+      }),
+      Claim.countDocuments({ ...baseFilter, priority: { $in: ['High', 'Urgent'] } }),
+      Claim.countDocuments({
+        ...baseFilter,
+        estimatedSettlement: { $lt: new Date() },
+        status: { $nin: ['Settled', 'Closed'] }
+      })
     ]);
 
     res.json({
       success: true,
       data: {
         totalClaims,
-        pendingClaims,
-        approvedClaims,
-        rejectedClaims,
-        recentClaims
+        activeClaims,
+        pendingApproval,
+        recentClaims,
+        highPriorityClaims,
+        overdueEstimates
       },
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
+    console.error('Get dashboard stats error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch dashboard statistics',
@@ -932,55 +696,88 @@ const getDashboardStats = async (req, res) => {
   }
 };
 
-/**
- * Bulk update claims
- */
+// Bulk update claims
 const bulkUpdateClaims = async (req, res) => {
   try {
     const { claimIds, updateData } = req.body;
 
-    // Validate request
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    if (!claimIds || !Array.isArray(claimIds) || claimIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
-        errors: errors.array(),
+        message: 'Claim IDs array is required',
         timestamp: new Date().toISOString()
       });
     }
 
-    updateData.updatedBy = req.user._id;
+    if (!updateData || Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Update data is required',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const validIds = claimIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+    if (validIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid claim IDs provided',
+        timestamp: new Date().toISOString()
+      });
+    }
 
     const result = await Claim.updateMany(
-      { _id: { $in: claimIds }, isDeleted: { $ne: true } },
-      updateData
+      { 
+        _id: { $in: validIds }, 
+        isDeleted: { $ne: true } 
+      },
+      { 
+        ...updateData, 
+        updatedBy: req.user._id 
+      }
     );
 
     res.json({
       success: true,
       message: `${result.modifiedCount} claims updated successfully`,
-      data: { modifiedCount: result.modifiedCount },
+      data: {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount
+      },
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error bulk updating claims:', error);
+    console.error('Bulk update claims error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to bulk update claims',
+      message: 'Failed to update claims',
       error: error.message,
       timestamp: new Date().toISOString()
     });
   }
 };
 
-/**
- * Bulk assign claims
- */
+// Bulk assign claims
 const bulkAssignClaims = async (req, res) => {
   try {
     const { claimIds, agentId } = req.body;
+
+    if (!claimIds || !Array.isArray(claimIds) || claimIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Claim IDs array is required',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (!agentId || !mongoose.Types.ObjectId.isValid(agentId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid agent ID is required',
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Verify agent exists
     const agent = await User.findById(agentId);
@@ -992,84 +789,109 @@ const bulkAssignClaims = async (req, res) => {
       });
     }
 
+    const validIds = claimIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+    
     const result = await Claim.updateMany(
-      { _id: { $in: claimIds }, isDeleted: { $ne: true } },
-      {
-        assignedTo: agentId,
-        updatedBy: req.user._id
+      { 
+        _id: { $in: validIds }, 
+        isDeleted: { $ne: true } 
+      },
+      { 
+        assignedTo: agentId, 
+        updatedBy: req.user._id 
       }
     );
 
     res.json({
       success: true,
       message: `${result.modifiedCount} claims assigned successfully`,
-      data: { modifiedCount: result.modifiedCount },
+      data: {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+        assignedTo: {
+          _id: agent._id,
+          name: `${agent.firstName} ${agent.lastName}`
+        }
+      },
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error bulk assigning claims:', error);
+    console.error('Bulk assign claims error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to bulk assign claims',
+      message: 'Failed to assign claims',
       error: error.message,
       timestamp: new Date().toISOString()
     });
   }
 };
 
-/**
- * Export claims
- */
+// Export claims
 const exportClaims = async (req, res) => {
   try {
-    const filterConditions = { isDeleted: { $ne: true } };
+    const {
+      status,
+      claimType,
+      priority,
+      assignedTo,
+      dateFrom,
+      dateTo
+    } = req.query;
 
-    // Apply filters from query params
-    Object.keys(req.query).forEach(key => {
-      if (req.query[key] && req.query[key] !== 'all') {
-        if (key === 'status' || key === 'claimType' || key === 'priority') {
-          filterConditions[key] = req.query[key];
-        }
-      }
-    });
+    // Build filter
+    const filter = { isDeleted: { $ne: true } };
 
     // Role-based filtering
     if (req.user.role === 'agent') {
-      filterConditions.assignedTo = req.user._id;
+      filter.assignedTo = req.user._id;
     }
 
-    const claims = await Claim.find(filterConditions)
+    // Apply filters
+    if (status && status !== 'all') filter.status = status;
+    if (claimType && claimType !== 'all') filter.claimType = claimType;
+    if (priority) filter.priority = priority;
+    if (assignedTo) filter.assignedTo = assignedTo;
+
+    // Date range filters
+    if (dateFrom || dateTo) {
+      filter.reportedDate = {};
+      if (dateFrom) filter.reportedDate.$gte = new Date(dateFrom);
+      if (dateTo) filter.reportedDate.$lte = new Date(dateTo);
+    }
+
+    const claims = await Claim.find(filter)
       .populate('clientId', 'firstName lastName email')
       .populate('policyId', 'policyNumber policyType')
       .populate('assignedTo', 'firstName lastName')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // Format data for export
+    // Transform data for export
     const exportData = claims.map(claim => ({
-      'Claim Number': claim.claimNumber,
-      'Client Name': `${claim.clientId.firstName} ${claim.clientId.lastName}`,
-      'Policy Number': claim.policyId.policyNumber,
-      'Claim Type': claim.claimType,
-      'Status': claim.status,
-      'Priority': claim.priority,
-      'Claim Amount': claim.claimAmount,
-      'Approved Amount': claim.approvedAmount || 0,
-      'Incident Date': claim.incidentDate.toISOString().split('T')[0],
-      'Reported Date': claim.reportedDate.toISOString().split('T')[0],
-      'Assigned To': `${claim.assignedTo.firstName} ${claim.assignedTo.lastName}`,
-      'Description': claim.description
+      claimNumber: claim.claimNumber,
+      clientName: claim.clientId ? `${claim.clientId.firstName} ${claim.clientId.lastName}` : 'N/A',
+      policyNumber: claim.policyId?.policyNumber || 'N/A',
+      claimType: claim.claimType,
+      status: claim.status,
+      priority: claim.priority,
+      claimAmount: claim.claimAmount,
+      approvedAmount: claim.approvedAmount,
+      incidentDate: claim.incidentDate,
+      reportedDate: claim.reportedDate,
+      assignedTo: claim.assignedTo ? `${claim.assignedTo.firstName} ${claim.assignedTo.lastName}` : 'N/A',
+      description: claim.description
     }));
 
     res.json({
       success: true,
       data: exportData,
-      count: exportData.length,
+      totalRecords: exportData.length,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error exporting claims:', error);
+    console.error('Export claims error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to export claims',
@@ -1079,15 +901,14 @@ const exportClaims = async (req, res) => {
   }
 };
 
-/**
- * Get policies for claim form
- */
+// Get policies for claim form
 const getPoliciesForClaim = async (req, res) => {
   try {
-    const policies = await Policy.find({ status: 'Active' })
+    const policies = await Policy.find({ isActive: true })
       .populate('clientId', 'firstName lastName')
-      .select('policyNumber policyType coverage clientId')
-      .sort({ policyNumber: 1 });
+      .select('policyNumber policyType premiumAmount coverageAmount clientId')
+      .sort({ policyNumber: 1 })
+      .lean();
 
     res.json({
       success: true,
@@ -1096,7 +917,7 @@ const getPoliciesForClaim = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching policies for claim:', error);
+    console.error('Get policies for claim error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch policies',
@@ -1106,14 +927,13 @@ const getPoliciesForClaim = async (req, res) => {
   }
 };
 
-/**
- * Get clients for claim form
- */
+// Get clients for claim form
 const getClientsForClaim = async (req, res) => {
   try {
-    const clients = await Client.find({ status: 'Active' })
-      .select('firstName lastName email phone')
-      .sort({ lastName: 1, firstName: 1 });
+    const clients = await Client.find({ isActive: true })
+      .select('firstName lastName email phoneNumber')
+      .sort({ firstName: 1, lastName: 1 })
+      .lean();
 
     res.json({
       success: true,
@@ -1122,7 +942,7 @@ const getClientsForClaim = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching clients for claim:', error);
+    console.error('Get clients for claim error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch clients',
@@ -1132,15 +952,22 @@ const getClientsForClaim = async (req, res) => {
   }
 };
 
-/**
- * Get policy details for claim
- */
+// Get policy details for claim
 const getPolicyDetails = async (req, res) => {
   try {
     const { policyId } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(policyId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid policy ID format',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     const policy = await Policy.findById(policyId)
-      .populate('clientId', 'firstName lastName email');
+      .populate('clientId', 'firstName lastName email')
+      .lean();
 
     if (!policy) {
       return res.status(404).json({
@@ -1157,177 +984,10 @@ const getPolicyDetails = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching policy details:', error);
+    console.error('Get policy details error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch policy details',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-};
-
-/**
- * Get claims aging report
- */
-const getClaimsAgingReport = async (req, res) => {
-  try {
-    const now = new Date();
-    
-    const agingReport = await Claim.aggregate([
-      { $match: { isDeleted: { $ne: true }, status: { $in: ['Reported', 'Under Review', 'Pending'] } } },
-      {
-        $addFields: {
-          ageInDays: {
-            $divide: [
-              { $subtract: [now, '$reportedDate'] },
-              1000 * 60 * 60 * 24
-            ]
-          }
-        }
-      },
-      {
-        $bucket: {
-          groupBy: '$ageInDays',
-          boundaries: [0, 7, 14, 30, 60, 90, Number.MAX_VALUE],
-          default: 'Other',
-          output: {
-            count: { $sum: 1 },
-            totalAmount: { $sum: '$claimAmount' },
-            claims: {
-              $push: {
-                _id: '$_id',
-                claimNumber: '$claimNumber',
-                claimAmount: '$claimAmount',
-                reportedDate: '$reportedDate',
-                ageInDays: { $floor: '$ageInDays' }
-              }
-            }
-          }
-        }
-      }
-    ]);
-
-    res.json({
-      success: true,
-      data: agingReport,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error fetching claims aging report:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch claims aging report',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-};
-
-/**
- * Get settlement report
- */
-const getSettlementReport = async (req, res) => {
-  try {
-    const settlementReport = await Claim.aggregate([
-      { $match: { isDeleted: { $ne: true }, status: { $in: ['Approved', 'Settled'] } } },
-      {
-        $group: {
-          _id: {
-            year: { $year: '$reportedDate' },
-            month: { $month: '$reportedDate' }
-          },
-          totalClaims: { $sum: 1 },
-          totalClaimAmount: { $sum: '$claimAmount' },
-          totalApprovedAmount: { $sum: '$approvedAmount' },
-          avgClaimAmount: { $avg: '$claimAmount' },
-          avgApprovedAmount: { $avg: '$approvedAmount' }
-        }
-      },
-      { $sort: { '_id.year': -1, '_id.month': -1 } },
-      { $limit: 12 }
-    ]);
-
-    res.json({
-      success: true,
-      data: settlementReport,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error fetching settlement report:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch settlement report',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-};
-
-/**
- * Import claims
- */
-const importClaims = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No file uploaded',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // This would typically parse CSV/Excel file and create claims
-    // For now, return success message
-    res.json({
-      success: true,
-      message: 'Claims import functionality will be implemented',
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error importing claims:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to import claims',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-};
-
-/**
- * Download import template
- */
-const downloadTemplate = async (req, res) => {
-  try {
-    const templateData = [
-      {
-        'Client ID': 'required',
-        'Policy ID': 'required',
-        'Claim Type': 'Auto|Home|Life|Health|Travel|Business|Disability|Property|Liability',
-        'Priority': 'Low|Medium|High|Urgent',
-        'Claim Amount': 'number',
-        'Deductible': 'number',
-        'Incident Date': 'YYYY-MM-DD',
-        'Description': 'text',
-        'Assigned To': 'User ID'
-      }
-    ];
-
-    res.json({
-      success: true,
-      data: templateData,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error downloading template:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to download template',
       error: error.message,
       timestamp: new Date().toISOString()
     });
@@ -1343,9 +1003,6 @@ module.exports = {
   updateClaimStatus,
   addNote,
   getClaimNotes,
-  uploadDocument,
-  getClaimDocuments,
-  deleteDocument,
   searchClaims,
   getClaimsStats,
   getDashboardStats,
@@ -1354,9 +1011,5 @@ module.exports = {
   exportClaims,
   getPoliciesForClaim,
   getClientsForClaim,
-  getPolicyDetails,
-  getClaimsAgingReport,
-  getSettlementReport,
-  importClaims,
-  downloadTemplate
+  getPolicyDetails
 };

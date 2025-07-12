@@ -1,101 +1,35 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { 
   FileText, 
   Clock, 
   CheckCircle, 
+  XCircle, 
   DollarSign,
   TrendingUp,
-  AlertTriangle
+  AlertTriangle,
+  Timer
 } from 'lucide-react';
-import { useDashboardStats } from '../../hooks/useClaimsBackend';
+import { useClaimsDashboardStats } from '../../hooks/useClaims';
+import { formatCurrency } from '@/lib/utils';
 
 const ClaimStatsCards = () => {
-  const { data: stats, isLoading } = useDashboardStats();
-
-  const defaultStats = {
-    totalClaims: 0,
-    pendingClaims: 0,
-    approvedClaims: 0,
-    totalClaimAmount: 0,
-    averageProcessingTime: 0,
-    rejectionRate: 0
-  };
-
-  const currentStats = stats || defaultStats;
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const statsCards = [
-    {
-      title: 'Total Claims',
-      value: currentStats.totalClaims?.toLocaleString() || '0',
-      icon: FileText,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      description: 'All time claims'
-    },
-    {
-      title: 'Pending Review',
-      value: currentStats.pendingClaims?.toLocaleString() || '0',
-      icon: Clock,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      description: 'Awaiting review'
-    },
-    {
-      title: 'Approved Claims',
-      value: currentStats.approvedClaims?.toLocaleString() || '0',
-      icon: CheckCircle,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      description: 'Successfully approved'
-    },
-    {
-      title: 'Total Amount',
-      value: formatCurrency(currentStats.totalClaimAmount || 0),
-      icon: DollarSign,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      description: 'Total claim value'
-    },
-    {
-      title: 'Avg Processing',
-      value: `${currentStats.averageProcessingTime || 0} days`,
-      icon: TrendingUp,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50',
-      description: 'Average time to process'
-    },
-    {
-      title: 'Rejection Rate',
-      value: `${(currentStats.rejectionRate || 0).toFixed(1)}%`,
-      icon: AlertTriangle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      description: 'Claims rejected'
-    }
-  ];
+  const { data: stats, isLoading, error } = useClaimsDashboardStats();
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="p-6">
-              <div className="animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-full"></div>
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {[...Array(8)].map((_, i) => (
+          <Card key={i} className="animate-pulse">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="h-4 bg-gray-200 rounded w-24"></div>
+              <div className="h-4 w-4 bg-gray-200 rounded"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-6 bg-gray-200 rounded w-16 mb-1"></div>
+              <div className="h-3 bg-gray-200 rounded w-20"></div>
             </CardContent>
           </Card>
         ))}
@@ -103,21 +37,117 @@ const ClaimStatsCards = () => {
     );
   }
 
+  if (error || !stats?.data) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card className="col-span-full">
+          <CardContent className="p-6">
+            <div className="text-center text-muted-foreground">
+              Unable to load claims statistics
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const statsData = stats.data;
+
+  const statCards = [
+    {
+      title: "Total Claims",
+      value: statsData.totalClaims?.toLocaleString() || "0",
+      description: "All time claims",
+      icon: FileText,
+      trend: "neutral"
+    },
+    {
+      title: "Active Claims",
+      value: statsData.activeClaims?.toLocaleString() || "0",
+      description: "Currently processing",
+      icon: Clock,
+      trend: statsData.activeClaims > 0 ? "warning" : "positive"
+    },
+    {
+      title: "Pending Approval",
+      value: statsData.pendingApproval?.toLocaleString() || "0",
+      description: "Awaiting review",
+      icon: Timer,
+      trend: statsData.pendingApproval > 5 ? "negative" : "neutral"
+    },
+    {
+      title: "Recent Claims",
+      value: statsData.recentClaims?.toLocaleString() || "0",
+      description: "Last 7 days",
+      icon: TrendingUp,
+      trend: "positive"
+    },
+    {
+      title: "High Priority",
+      value: statsData.highPriorityClaims?.toLocaleString() || "0",
+      description: "Urgent & High",
+      icon: AlertTriangle,
+      trend: statsData.highPriorityClaims > 0 ? "negative" : "positive"
+    },
+    {
+      title: "Overdue Estimates",
+      value: statsData.overdueEstimates?.toLocaleString() || "0",
+      description: "Past settlement date",
+      icon: XCircle,
+      trend: statsData.overdueEstimates > 0 ? "negative" : "positive"
+    }
+  ];
+
+  const getTrendColor = (trend) => {
+    switch (trend) {
+      case 'positive':
+        return 'text-green-600';
+      case 'negative':
+        return 'text-red-600';
+      case 'warning':
+        return 'text-yellow-600';
+      default:
+        return 'text-gray-600';
+    }
+  };
+
+  const getTrendBadge = (trend, value) => {
+    if (value === "0") return null;
+    
+    switch (trend) {
+      case 'positive':
+        return <Badge variant="secondary" className="bg-green-100 text-green-800">Good</Badge>;
+      case 'negative':
+        return <Badge variant="destructive" className="bg-red-100 text-red-800">Attention</Badge>;
+      case 'warning':
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Monitor</Badge>;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-      {statsCards.map((stat, index) => {
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      {statCards.map((stat, index) => {
         const IconComponent = stat.icon;
         return (
           <Card key={index} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {stat.title}
+              </CardTitle>
+              <IconComponent className={`h-4 w-4 ${getTrendColor(stat.trend)}`} />
+            </CardHeader>
+            <CardContent>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-xs text-gray-500 mt-1">{stat.description}</p>
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stat.description}
+                  </p>
                 </div>
-                <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                  <IconComponent className={`h-6 w-6 ${stat.color}`} />
+                <div>
+                  {getTrendBadge(stat.trend, stat.value)}
                 </div>
               </div>
             </CardContent>
