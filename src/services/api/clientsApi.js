@@ -1,41 +1,183 @@
 
-import MongoDBApiService from './mongodbApiService.js';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { toast } from 'sonner';
+
+// Base API configuration for MongoDB backend
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 /**
- * Clients API Service with MongoDB Integration
+ * Unified Clients API Service for MongoDB Integration
+ * Connects directly to Node.js + Express + MongoDB backend
  */
-class ClientsApiService extends MongoDBApiService {
+class ClientsApiService {
   constructor() {
-    super(API_ENDPOINTS.CLIENTS);
+    this.baseURL = `${API_BASE_URL}/clients`;
   }
 
+  /**
+   * Generic API request handler with proper error handling
+   */
+  async makeRequest(endpoint, options = {}) {
+    const url = endpoint.startsWith('http') ? endpoint : `${this.baseURL}${endpoint}`;
+    
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    // Add authorization token
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    try {
+      console.log(`Making API request to MongoDB: ${url}`, config);
+      const response = await fetch(url, config);
+      
+      const responseData = await response.json();
+      console.log('MongoDB API response:', responseData);
+      
+      if (!response.ok) {
+        throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error('MongoDB API Request failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all clients with filtering and pagination
+   */
   async getClients(params = {}) {
-    return this.getAll(params);
+    const queryParams = new URLSearchParams();
+    
+    // Add pagination parameters
+    if (params.page) queryParams.append('page', params.page);
+    if (params.limit) queryParams.append('limit', params.limit);
+    
+    // Add filtering parameters
+    if (params.search) queryParams.append('search', params.search);
+    if (params.type && params.type !== 'all') queryParams.append('type', params.type);
+    if (params.status && params.status !== 'All') queryParams.append('status', params.status);
+    
+    // Add sorting parameters
+    if (params.sortField) queryParams.append('sortField', params.sortField);
+    if (params.sortDirection) queryParams.append('sortDirection', params.sortDirection);
+
+    const queryString = queryParams.toString();
+    const endpoint = queryString ? `?${queryString}` : '';
+
+    const response = await this.makeRequest(endpoint);
+    
+    return {
+      data: response.data,
+      total: response.pagination?.totalItems || response.total || 0,
+      totalPages: response.pagination?.totalPages || response.totalPages || 1,
+      currentPage: response.pagination?.currentPage || response.currentPage || 1,
+      success: true
+    };
   }
 
-  async getClientById(clientId) {
-    return this.getById(clientId);
+  /**
+   * Get a single client by ID
+   */
+  async getClientById(id) {
+    const response = await this.makeRequest(`/${id}`);
+    return response.data;
   }
 
+  /**
+   * Create a new client
+   */
   async createClient(clientData) {
-    return this.create(clientData);
+    const response = await this.makeRequest('', {
+      method: 'POST',
+      body: JSON.stringify(clientData),
+    });
+
+    return response.data;
   }
 
+  /**
+   * Update an existing client
+   */
   async updateClient(clientId, clientData) {
-    return this.update(clientId, clientData);
+    const response = await this.makeRequest(`/${clientId}`, {
+      method: 'PUT',
+      body: JSON.stringify(clientData),
+    });
+
+    return response.data;
   }
 
-  async deleteClient(clientId) {
-    return this.delete(clientId);
+  /**
+   * Delete a client
+   */
+  async deleteClient(id) {
+    const response = await this.makeRequest(`/${id}`, {
+      method: 'DELETE',
+    });
+
+    return response;
   }
 
-  async searchClients(query, filters = {}) {
-    const params = { search: query, ...filters };
-    const queryString = new URLSearchParams(params).toString();
-    return this.makeRequest(`/search?${queryString}`);
+  /**
+   * Search clients
+   */
+  async searchClients(query, limit = 10) {
+    const response = await this.makeRequest(`/search/${encodeURIComponent(query)}?limit=${limit}`);
+    return response.data;
   }
 
+  /**
+   * Get clients by agent
+   */
+  async getClientsByAgent(agentId) {
+    const response = await this.makeRequest(`/agent/${agentId}`);
+    return response.data;
+  }
+
+  /**
+   * Assign client to agent
+   */
+  async assignClientToAgent(clientId, agentId) {
+    const response = await this.makeRequest(`/${clientId}/assign`, {
+      method: 'PUT',
+      body: JSON.stringify({ agentId }),
+    });
+
+    return response.data;
+  }
+
+  /**
+   * Get client statistics
+   */
+  async getClientStats() {
+    const response = await this.makeRequest('/stats/summary');
+    return response.data;
+  }
+
+  /**
+   * Export clients data
+   */
+  async exportClients(exportData) {
+    const response = await this.makeRequest('/export', {
+      method: 'POST',
+      body: JSON.stringify(exportData),
+    });
+
+    return response;
+  }
+
+  /**
+   * Bulk operations
+   */
   async bulkUpdateClients(clientIds, updateData) {
     return this.makeRequest('/bulk-update', {
       method: 'POST',
@@ -43,21 +185,72 @@ class ClientsApiService extends MongoDBApiService {
     });
   }
 
-  async exportClients(exportData) {
-    return this.export(exportData);
+  async bulkDeleteClients(clientIds) {
+    return this.makeRequest('/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ clientIds })
+    });
   }
 
-  async getClientsByAgent(agentId) {
-    return this.makeRequest(`/agent/${agentId}`);
+  /**
+   * Document operations
+   */
+  async uploadDocument(clientId, documentType, file) {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('documentType', documentType);
+
+    const response = await this.makeRequest(`/${clientId}/documents`, {
+      method: 'POST',
+      headers: {}, // Remove Content-Type to let browser set it for FormData
+      body: formData,
+    });
+
+    return response.data;
   }
 
-  async assignClientToAgent(clientId, agentId) {
-    return this.makeRequest(`/${clientId}/assign`, {
+  async getClientDocuments(clientId) {
+    const response = await this.makeRequest(`/${clientId}/documents`);
+    return response.data;
+  }
+
+  async deleteDocument(clientId, documentId) {
+    const response = await this.makeRequest(`/${clientId}/documents/${documentId}`, {
+      method: 'DELETE',
+    });
+
+    return response;
+  }
+
+  /**
+   * Notes operations
+   */
+  async addClientNote(clientId, noteData) {
+    return this.makeRequest(`/${clientId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(noteData)
+    });
+  }
+
+  async getClientNotes(clientId) {
+    const response = await this.makeRequest(`/${clientId}/notes`);
+    return response.data;
+  }
+
+  async updateClientNote(clientId, noteId, noteData) {
+    return this.makeRequest(`/${clientId}/notes/${noteId}`, {
       method: 'PUT',
-      body: JSON.stringify({ agentId })
+      body: JSON.stringify(noteData)
+    });
+  }
+
+  async deleteClientNote(clientId, noteId) {
+    return this.makeRequest(`/${clientId}/notes/${noteId}`, {
+      method: 'DELETE'
     });
   }
 }
 
+// Export singleton instance
 export const clientsApi = new ClientsApiService();
 export default clientsApi;

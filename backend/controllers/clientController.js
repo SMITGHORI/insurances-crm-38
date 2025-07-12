@@ -39,9 +39,9 @@ const getAllClients = async (req, res) => {
       filter.clientType = type;
     }
 
-    // Status filtering
+    // Status filtering - handle both 'Active' and 'active' formats
     if (status && status !== 'All') {
-      filter.status = status;
+      filter.status = status.toLowerCase();
     }
 
     // Sort options
@@ -60,9 +60,24 @@ const getAllClients = async (req, res) => {
 
     const result = await Client.paginate(filter, options);
 
+    // Transform data to match frontend expectations
+    const transformedData = result.docs.map(doc => ({
+      ...doc.toObject(),
+      // Add display name based on client type
+      displayName: doc.clientType === 'individual' 
+        ? `${doc.firstName || ''} ${doc.lastName || ''}`.trim()
+        : doc.clientType === 'corporate' 
+        ? doc.companyName 
+        : doc.clientType === 'group'
+        ? doc.groupName
+        : doc.name || 'Unknown Client',
+      // Ensure status is properly formatted
+      status: doc.status || 'pending'
+    }));
+
     res.status(200).json({
       success: true,
-      data: result.docs,
+      data: transformedData,
       pagination: {
         currentPage: result.page,
         totalPages: result.totalPages,
@@ -109,13 +124,25 @@ const getClientById = async (req, res) => {
     if (!client) {
       return res.status(404).json({
         success: false,
-        message: 'Client not found'
+        message: 'Client not found or access denied'
       });
     }
 
+    // Transform client data
+    const transformedClient = {
+      ...client.toObject(),
+      displayName: client.clientType === 'individual' 
+        ? `${client.firstName || ''} ${client.lastName || ''}`.trim()
+        : client.clientType === 'corporate' 
+        ? client.companyName 
+        : client.clientType === 'group'
+        ? client.groupName
+        : client.name || 'Unknown Client'
+    };
+
     res.status(200).json({
       success: true,
-      data: client
+      data: transformedClient
     });
   } catch (error) {
     console.error('Error fetching client:', error);
@@ -146,9 +173,23 @@ const createClient = async (req, res) => {
     const clientCount = await Client.countDocuments();
     clientData.clientId = `CL${String(clientCount + 1).padStart(6, '0')}`;
 
+    // Set default status if not provided
+    if (!clientData.status) {
+      clientData.status = 'prospective';
+    }
+
     // If no assigned agent specified, assign to current user if they're an agent
     if (!clientData.agentId && req.user.role === 'agent') {
       clientData.agentId = req.user.id;
+    }
+
+    // Create name field for searching
+    if (clientData.clientType === 'individual') {
+      clientData.name = `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim();
+    } else if (clientData.clientType === 'corporate') {
+      clientData.name = clientData.companyName;
+    } else if (clientData.clientType === 'group') {
+      clientData.name = clientData.groupName;
     }
 
     // Create the client
@@ -160,10 +201,15 @@ const createClient = async (req, res) => {
       { path: 'agentId', select: 'name email' }
     ]);
 
+    const transformedClient = {
+      ...client.toObject(),
+      displayName: clientData.name || 'Unknown Client'
+    };
+
     res.status(201).json({
       success: true,
       message: 'Client created successfully',
-      data: client
+      data: transformedClient
     });
   } catch (error) {
     console.error('Error creating client:', error);
@@ -229,6 +275,15 @@ const updateClient = async (req, res) => {
       filter.agentId = req.user.id;
     }
 
+    // Update name field for searching
+    if (updateData.clientType === 'individual') {
+      updateData.name = `${updateData.firstName || ''} ${updateData.lastName || ''}`.trim();
+    } else if (updateData.clientType === 'corporate') {
+      updateData.name = updateData.companyName;
+    } else if (updateData.clientType === 'group') {
+      updateData.name = updateData.groupName;
+    }
+
     const client = await Client.findOneAndUpdate(
       filter,
       updateData,
@@ -244,10 +299,15 @@ const updateClient = async (req, res) => {
       });
     }
 
+    const transformedClient = {
+      ...client.toObject(),
+      displayName: client.name || 'Unknown Client'
+    };
+
     res.status(200).json({
       success: true,
       message: 'Client updated successfully',
-      data: client
+      data: transformedClient
     });
   } catch (error) {
     console.error('Error updating client:', error);
@@ -332,9 +392,14 @@ const searchClients = async (req, res) => {
       .limit(parseInt(limit))
       .populate('agentId', 'name email');
 
+    const transformedClients = clients.map(client => ({
+      ...client.toObject(),
+      displayName: client.name || 'Unknown Client'
+    }));
+
     res.status(200).json({
       success: true,
-      data: clients
+      data: transformedClients
     });
   } catch (error) {
     console.error('Error searching clients:', error);

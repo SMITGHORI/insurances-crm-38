@@ -11,7 +11,14 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import ClientTable from '../components/clients/ClientTable';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useClients, useDeleteClient, useCreateClient, useBulkClientOperations, useClientExport } from '../hooks/useClients';
+import { 
+  useClients, 
+  useDeleteClient, 
+  useCreateClient, 
+  useBulkClientOperations, 
+  useClientExport,
+  useAssignClient
+} from '../hooks/useClients';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { PageSkeleton } from '@/components/ui/professional-skeleton';
@@ -63,6 +70,7 @@ const Clients = () => {
   const deleteClientMutation = useDeleteClient();
   const { bulkAssign, bulkUpdate, bulkDelete } = useBulkClientOperations();
   const exportMutation = useClientExport();
+  const assignClientMutation = useAssignClient();
 
   // Extract data from MongoDB API response
   const clients = clientsResponse?.data || [];
@@ -79,7 +87,7 @@ const Clients = () => {
   });
 
   // Filter options
-  const filterOptions = ['All', 'Active', 'Inactive', 'Pending'];
+  const filterOptions = ['All', 'Active', 'Inactive', 'Pending', 'Prospective'];
 
   // Handle sorting
   const handleSort = (field) => {
@@ -116,7 +124,7 @@ const Clients = () => {
     console.log('Editing client:', id);
     if (isAgent()) {
       const client = clients.find(c => c._id === id);
-      if (client?.assignedAgentId !== user.id) {
+      if (client?.agentId !== user.id) {
         toast.error('You can only edit clients assigned to you');
         return;
       }
@@ -180,7 +188,7 @@ const Clients = () => {
     console.log('Bulk updating client status in MongoDB:', { clientIds, status });
     await bulkUpdate.mutateAsync({ 
       clientIds, 
-      updateData: { status } 
+      updateData: { status: status.toLowerCase() } 
     });
     setSelectedClients([]);
   };
@@ -193,21 +201,11 @@ const Clients = () => {
     }
   };
 
-  const handleBulkExport = (clients) => {
-    const exportData = {
-      type: 'selected',
-      format: 'csv',
-      selectedIds: clients.map(c => c._id || c.id)
-    };
-    handleExport(exportData);
-  };
-
   // Filter clients by type for tabs
   const getFilteredClients = (type) => {
     if (type === 'all') return clients;
     return clients.filter(client => 
-      client.clientType?.toLowerCase() === type.toLowerCase() ||
-      client.type?.toLowerCase() === type.toLowerCase()
+      client.clientType?.toLowerCase() === type.toLowerCase()
     );
   };
 
@@ -299,7 +297,14 @@ const Clients = () => {
           onBulkAssign={handleBulkAssign}
           onBulkStatusUpdate={handleBulkStatusUpdate}
           onBulkDelete={handleBulkDelete}
-          onBulkExport={handleBulkExport}
+          onBulkExport={(clients) => {
+            const exportData = {
+              type: 'selected',
+              format: 'csv',
+              selectedIds: clients.map(c => c._id || c.id)
+            };
+            handleExport(exportData);
+          }}
         />
 
         {/* Enhanced Client Tabs - all data from MongoDB */}

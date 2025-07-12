@@ -1,18 +1,45 @@
 
 import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Users, UserCheck, UserX, UserPlus, DollarSign, Shield } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import clientsBackendApi from '@/services/api/clientsApiBackend';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Users, UserCheck, UserX, UserPlus, TrendingUp, FileText } from 'lucide-react';
+import { useClientStats } from '@/hooks/useClients';
 
 const ClientStatsCards = () => {
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['clientStats'],
-    queryFn: () => clientsBackendApi.request('/stats/summary'),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
+  const { data: stats, isLoading, error } = useClientStats();
 
-  const statsData = stats?.data || {
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        {[...Array(6)].map((_, index) => (
+          <Card key={index} className="animate-pulse">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="h-4 bg-gray-200 rounded w-20"></div>
+              <div className="h-4 w-4 bg-gray-200 rounded"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-8 bg-gray-200 rounded w-16 mb-1"></div>
+              <div className="h-3 bg-gray-200 rounded w-24"></div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    console.error('Error loading client stats:', error);
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <Card className="col-span-full">
+          <CardContent className="p-6 text-center">
+            <p className="text-red-600">Failed to load statistics: {error.message}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const statsData = stats || {
     totalClients: 0,
     activeClients: 0,
     inactiveClients: 0,
@@ -21,95 +48,131 @@ const ClientStatsCards = () => {
     totalPolicies: 0
   };
 
-  const statCards = [
-    {
-      title: 'Total Clients',
-      value: statsData.totalClients,
-      icon: Users,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100'
-    },
-    {
-      title: 'Active Clients',
-      value: statsData.activeClients,
-      icon: UserCheck,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100'
-    },
-    {
-      title: 'Inactive Clients',
-      value: statsData.inactiveClients,
-      icon: UserX,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100'
-    },
-    {
-      title: 'Prospective Clients',
-      value: statsData.prospectiveClients,
-      icon: UserPlus,
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-100'
-    },
-    {
-      title: 'Total Premium',
-      value: `₹${statsData.totalPremium.toLocaleString()}`,
-      icon: DollarSign,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100'
-    },
-    {
-      title: 'Total Policies',
-      value: statsData.totalPolicies,
-      icon: Shield,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-100'
-    }
-  ];
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount || 0);
+  };
 
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <Card key={index} className="animate-pulse">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="h-4 bg-gray-200 rounded w-20 mb-2"></div>
-                  <div className="h-8 bg-gray-200 rounded w-16"></div>
-                </div>
-                <div className="h-10 w-10 bg-gray-200 rounded-full"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
+  const formatNumber = (num) => {
+    return new Intl.NumberFormat('en-IN').format(num || 0);
+  };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-      {statCards.map((stat, index) => {
-        const IconComponent = stat.icon;
-        return (
-          <Card key={index} className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">
-                    {stat.title}
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
-                  </p>
-                </div>
-                <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                  <IconComponent className={`h-6 w-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      {/* Total Clients */}
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">
+            Total Clients
+          </CardTitle>
+          <Users className="h-4 w-4 text-blue-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-gray-900">
+            {formatNumber(statsData.totalClients)}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            All registered clients
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Active Clients */}
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">
+            Active Clients
+          </CardTitle>
+          <UserCheck className="h-4 w-4 text-green-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-green-700">
+            {formatNumber(statsData.activeClients)}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            {statsData.totalClients > 0 
+              ? `${Math.round((statsData.activeClients / statsData.totalClients) * 100)}% of total`
+              : '0% of total'
+            }
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Prospective Clients */}
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">
+            Prospective
+          </CardTitle>
+          <UserPlus className="h-4 w-4 text-orange-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-orange-700">
+            {formatNumber(statsData.prospectiveClients)}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Potential new clients
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Inactive Clients */}
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">
+            Inactive
+          </CardTitle>
+          <UserX className="h-4 w-4 text-red-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-red-700">
+            {formatNumber(statsData.inactiveClients)}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Require attention
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Total Premium */}
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">
+            Total Premium
+          </CardTitle>
+          <TrendingUp className="h-4 w-4 text-purple-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-purple-700">
+            {formatCurrency(statsData.totalPremium)}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Collected premiums
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Total Policies */}
+      <Card className="hover:shadow-md transition-shadow">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">
+            Total Policies
+          </CardTitle>
+          <FileText className="h-4 w-4 text-indigo-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-indigo-700">
+            {formatNumber(statsData.totalPolicies)}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Active policies
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 };
