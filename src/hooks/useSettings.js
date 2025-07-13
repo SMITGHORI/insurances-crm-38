@@ -1,5 +1,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { settingsBackendApi } from '@/services/api/settingsApiBackend';
@@ -45,6 +46,8 @@ export const useSettings = () => {
         profile: { ...old?.profile, ...data.profile }
       }));
       
+      toast.success('Profile updated successfully');
+      
       // Trigger real-time update
       window.dispatchEvent(new CustomEvent('settings-updated', { 
         detail: { type: 'profile', data } 
@@ -52,7 +55,7 @@ export const useSettings = () => {
     },
     onError: (error) => {
       console.error('Error updating profile:', error);
-      throw error;
+      toast.error('Failed to update profile');
     },
   });
 
@@ -65,6 +68,8 @@ export const useSettings = () => {
         notifications: { ...old?.notifications, ...data.notifications }
       }));
       
+      toast.success('Notification settings updated successfully');
+      
       // Trigger real-time update
       window.dispatchEvent(new CustomEvent('settings-updated', { 
         detail: { type: 'notifications', data } 
@@ -72,7 +77,7 @@ export const useSettings = () => {
     },
     onError: (error) => {
       console.error('Error updating notifications:', error);
-      throw error;
+      toast.error('Failed to update notification settings');
     },
   });
 
@@ -85,6 +90,8 @@ export const useSettings = () => {
         security: { ...old?.security, ...data.security }
       }));
       
+      toast.success('Security settings updated successfully');
+      
       // Trigger real-time update
       window.dispatchEvent(new CustomEvent('settings-updated', { 
         detail: { type: 'security', data } 
@@ -92,7 +99,7 @@ export const useSettings = () => {
     },
     onError: (error) => {
       console.error('Error updating security:', error);
-      throw error;
+      toast.error('Failed to update security settings');
     },
   });
 
@@ -105,6 +112,8 @@ export const useSettings = () => {
         preferences: { ...old?.preferences, ...data.preferences }
       }));
       
+      toast.success('Preferences updated successfully');
+      
       // Trigger real-time update
       window.dispatchEvent(new CustomEvent('settings-updated', { 
         detail: { type: 'preferences', data } 
@@ -112,7 +121,7 @@ export const useSettings = () => {
     },
     onError: (error) => {
       console.error('Error updating preferences:', error);
-      throw error;
+      toast.error('Failed to update preferences');
     },
   });
 
@@ -129,6 +138,8 @@ export const useSettings = () => {
         }
       }));
       
+      toast.success('Password changed successfully');
+      
       // Trigger real-time update
       window.dispatchEvent(new CustomEvent('settings-updated', { 
         detail: { type: 'password', data } 
@@ -136,7 +147,7 @@ export const useSettings = () => {
     },
     onError: (error) => {
       console.error('Error changing password:', error);
-      throw error;
+      toast.error('Failed to change password');
     },
   });
 
@@ -146,6 +157,8 @@ export const useSettings = () => {
     onSuccess: (data) => {
       queryClient.setQueryData(settingsQueryKeys.user(user._id), data);
       
+      toast.success('Settings reset to defaults successfully');
+      
       // Trigger real-time update
       window.dispatchEvent(new CustomEvent('settings-updated', { 
         detail: { type: 'reset', data } 
@@ -153,7 +166,7 @@ export const useSettings = () => {
     },
     onError: (error) => {
       console.error('Error resetting settings:', error);
-      throw error;
+      toast.error('Failed to reset settings');
     },
   });
 

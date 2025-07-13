@@ -7,7 +7,7 @@ import { API_CONFIG, API_ENDPOINTS } from '../../config/api';
  */
 class SettingsBackendApiService {
   constructor() {
-    this.baseURL = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.SETTINGS || '/settings'}`;
+    this.baseURL = `${API_CONFIG?.BASE_URL || '/api'}${API_ENDPOINTS?.SETTINGS || '/settings'}`;
   }
 
   /**
@@ -31,6 +31,7 @@ class SettingsBackendApiService {
     }
 
     try {
+      console.log(`Making settings API request to: ${url}`);
       const response = await fetch(url, config);
       
       const responseData = await response.json();
@@ -39,6 +40,7 @@ class SettingsBackendApiService {
         throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
       }
 
+      console.log('Settings API response:', responseData);
       return responseData;
     } catch (error) {
       console.error('Settings API Request failed:', error.message);
@@ -342,52 +344,6 @@ class SettingsBackendApiService {
         analytics: true
       }
     };
-  }
-
-  /**
-   * Backup settings to local storage
-   */
-  backupSettingsLocally(settings) {
-    try {
-      const backup = {
-        settings,
-        timestamp: new Date().toISOString()
-      };
-      localStorage.setItem('settingsBackup', JSON.stringify(backup));
-      return true;
-    } catch (error) {
-      console.error('Failed to backup settings locally:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Restore settings from local storage
-   */
-  restoreSettingsFromLocal() {
-    try {
-      const backup = localStorage.getItem('settingsBackup');
-      if (backup) {
-        return JSON.parse(backup);
-      }
-      return null;
-    } catch (error) {
-      console.error('Failed to restore settings from local storage:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Clear local settings backup
-   */
-  clearLocalBackup() {
-    try {
-      localStorage.removeItem('settingsBackup');
-      return true;
-    } catch (error) {
-      console.error('Failed to clear local backup:', error);
-      return false;
-    }
   }
 }
 
