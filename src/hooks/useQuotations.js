@@ -25,10 +25,12 @@ export const quotationsQueryKeys = {
 export const useQuotations = (params = {}) => {
   return useQuery({
     queryKey: quotationsQueryKeys.list(params),
-    queryFn: () => quotationsApi.getQuotations(params),
+    queryFn: async () => {
+      const response = await quotationsApi.getQuotations(params);
+      return response;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error) => {
-      // Don't retry if we're in offline mode
       if (quotationsApi.isOfflineMode) return false;
       return failureCount < 2;
     },
@@ -48,8 +50,11 @@ export const useQuotations = (params = {}) => {
 export const useQuotation = (quotationId) => {
   return useQuery({
     queryKey: quotationsQueryKeys.detail(quotationId),
-    queryFn: () => quotationsApi.getQuotationById(quotationId),
-    enabled: !!quotationId, // Only run if quotationId exists
+    queryFn: async () => {
+      if (!quotationId) return null;
+      return await quotationsApi.getQuotationById(quotationId);
+    },
+    enabled: !!quotationId,
     staleTime: 5 * 60 * 1000,
     retry: (failureCount, error) => {
       if (quotationsApi.isOfflineMode) return false;
@@ -82,7 +87,6 @@ export const useCreateQuotation = () => {
       return quotationsApi.createQuotation(quotationData);
     },
     onSuccess: (data, variables) => {
-      // Invalidate and refetch quotations list
       queryClient.invalidateQueries({ queryKey: quotationsQueryKeys.lists() });
       
       const mode = quotationsApi.isOfflineMode ? ' (offline mode)' : '';
@@ -104,16 +108,12 @@ export const useUpdateQuotation = () => {
   return useMutation({
     mutationFn: async ({ id, quotationData }) => {
       console.log('Updating quotation with data:', quotationData);
-      
       return quotationsApi.updateQuotation(id, quotationData);
     },
     onSuccess: (data, variables) => {
       const { id } = variables;
       
-      // Update specific quotation in cache
       queryClient.setQueryData(quotationsQueryKeys.detail(id), data);
-      
-      // Invalidate lists to refresh them
       queryClient.invalidateQueries({ queryKey: quotationsQueryKeys.lists() });
       
       const mode = quotationsApi.isOfflineMode ? ' (offline mode)' : '';
@@ -135,10 +135,7 @@ export const useDeleteQuotation = () => {
   return useMutation({
     mutationFn: (quotationId) => quotationsApi.deleteQuotation(quotationId),
     onSuccess: (data, quotationId) => {
-      // Remove quotation from cache
       queryClient.removeQueries({ queryKey: quotationsQueryKeys.detail(quotationId) });
-      
-      // Invalidate lists to refresh them
       queryClient.invalidateQueries({ queryKey: quotationsQueryKeys.lists() });
       
       const mode = quotationsApi.isOfflineMode ? ' (offline mode)' : '';
@@ -162,10 +159,7 @@ export const useSendQuotation = () => {
     onSuccess: (data, variables) => {
       const { quotationId } = variables;
       
-      // Update specific quotation in cache
       queryClient.setQueryData(quotationsQueryKeys.detail(quotationId), data);
-      
-      // Invalidate lists to refresh them
       queryClient.invalidateQueries({ queryKey: quotationsQueryKeys.lists() });
       
       const mode = quotationsApi.isOfflineMode ? ' (offline mode)' : '';
@@ -190,10 +184,7 @@ export const useUpdateQuotationStatus = () => {
     onSuccess: (data, variables) => {
       const { quotationId } = variables;
       
-      // Update specific quotation in cache
       queryClient.setQueryData(quotationsQueryKeys.detail(quotationId), data);
-      
-      // Invalidate lists to refresh them
       queryClient.invalidateQueries({ queryKey: quotationsQueryKeys.lists() });
       
       const mode = quotationsApi.isOfflineMode ? ' (offline mode)' : '';
@@ -223,6 +214,39 @@ export const useQuotationsStats = (params = {}) => {
       if (!quotationsApi.isOfflineMode) {
         toast.error('Failed to load quotations statistics');
       }
+    },
+  });
+};
+
+/**
+ * Hook to export quotations
+ */
+export const useExportQuotations = () => {
+  return useMutation({
+    mutationFn: async (exportParams) => {
+      return quotationsApi.exportQuotations(exportParams);
+    },
+    onSuccess: () => {
+      toast.success('Quotations exported successfully');
+    },
+    onError: (error) => {
+      console.error('Error exporting quotations:', error);
+      toast.error(`Failed to export quotations: ${error.message}`);
+    },
+  });
+};
+
+/**
+ * Hook to search quotations
+ */
+export const useSearchQuotations = () => {
+  return useMutation({
+    mutationFn: async ({ query, limit = 10 }) => {
+      return quotationsApi.searchQuotations(query, limit);
+    },
+    onError: (error) => {
+      console.error('Error searching quotations:', error);
+      toast.error(`Search failed: ${error.message}`);
     },
   });
 };
