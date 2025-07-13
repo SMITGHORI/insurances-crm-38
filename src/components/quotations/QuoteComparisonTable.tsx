@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -10,39 +11,8 @@ import { formatCurrency } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import Protected from '@/components/Protected';
 import ProtectedRow from '@/components/ProtectedRow';
-import { useUpdateQuoteStatus, useExportQuotes } from '@/hooks/useQuotes';
+import { useUpdateQuoteStatus, useExportQuotes, Quote } from '@/hooks/useQuotes';
 import { toast } from 'sonner';
-
-// Define Quote interface to match the expected structure
-interface Quote {
-  id: string;
-  quoteId?: string;
-  leadId?: string;
-  leadName?: string;
-  clientId: string;
-  clientName: string;
-  carrier: string;
-  type: string;
-  premium: number;
-  coverageAmount: number;
-  status: 'draft' | 'ready' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired';
-  validUntil: string;
-  createdAt: string;
-  updatedAt: string;
-  branch: string;
-  valueScore?: number;
-  planName?: string;
-  validityStart?: string;
-  validityEnd?: string;
-  insuranceType?: string;
-  agentId?: string;
-  agentName?: string;
-  commissionAmount?: number;
-  emailSent?: boolean;
-  whatsappSent?: boolean;
-  documentUrl?: string;
-  followUpReminders?: any[];
-}
 
 interface QuoteComparisonTableProps {
   quotes: Quote[];
@@ -104,7 +74,7 @@ const QuoteComparisonTable: React.FC<QuoteComparisonTableProps> = ({
     try {
       setExportingQuotes(true);
       const visibleQuotes = quotes.filter(quote => 
-        hasPermission('quotations', 'view') && isSameBranch(quote.branch)
+        hasPermission('quotations', 'view') && isSameBranch(quote.leadId || 'default')
       );
       
       await exportQuotesMutation.mutateAsync(visibleQuotes);
@@ -174,14 +144,14 @@ const QuoteComparisonTable: React.FC<QuoteComparisonTableProps> = ({
               {quotes.map((quote) => (
                 <ProtectedRow
                   key={quote.id}
-                  recordBranch={quote.branch}
+                  recordBranch={quote.leadId || 'default'}
                   module="quotations"
                   branchCheck={true}
                 >
                   <TableRow className="hover:bg-gray-50 cursor-pointer">
                     <TableCell className="font-medium">
                       <div>
-                        <div className="font-semibold">{quote.carrier}</div>
+                        <div className="font-semibold">{quote.insuranceCompany}</div>
                         <div className="text-sm text-gray-500">
                           Created {format(new Date(quote.createdAt), 'MMM dd, yyyy')}
                         </div>
@@ -191,11 +161,11 @@ const QuoteComparisonTable: React.FC<QuoteComparisonTableProps> = ({
                       {formatCurrency(quote.premium)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {formatCurrency(quote.coverageAmount)}
+                      {formatCurrency(quote.sumInsured)}
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant="outline" className="font-mono">
-                        {quote.valueScore || calculateValueScore(quote.coverageAmount, quote.premium)}
+                        {quote.valueScore || calculateValueScore(quote.sumInsured, quote.premium)}
                       </Badge>
                     </TableCell>
                     <TableCell>

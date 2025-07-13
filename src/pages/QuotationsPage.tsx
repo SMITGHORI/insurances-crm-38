@@ -32,14 +32,16 @@ const QuotationsPage: React.FC = () => {
   console.log('QuotationsPage - Search param:', searchParam);
 
   // Add error boundary for the quotes hook
-  let quotes = [];
+  let quotes: any[] = [];
   let loading = false;
   let error = null;
   let refreshQuotes = () => {};
 
   try {
     const quotesResult = useQuotes({ search: searchParam });
-    quotes = quotesResult.data || [];
+    // Handle the data structure correctly - extract the quotes array from the response
+    const quotesData = quotesResult.data;
+    quotes = Array.isArray(quotesData) ? quotesData : (quotesData?.data || []);
     loading = quotesResult.isLoading;
     error = quotesResult.error;
     refreshQuotes = quotesResult.refetch;
