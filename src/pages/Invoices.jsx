@@ -33,7 +33,20 @@ const Invoices = () => {
   const [activeTab, setActiveTab] = useState('all');
 
   // Use backend hooks for data fetching
-  const { data: invoicesData, isLoading, error } = useInvoicesBackend(filterParams);
+  const { data: invoicesResponse, isLoading, error } = useInvoicesBackend(filterParams);
+
+  // Extract invoices data from response
+  const invoicesData = invoicesResponse ? {
+    data: invoicesResponse.data || [],
+    total: invoicesResponse.total || 0,
+    page: invoicesResponse.page || 1,
+    totalPages: invoicesResponse.totalPages || 1
+  } : {
+    data: [],
+    total: 0,
+    page: 1,
+    totalPages: 1
+  };
 
   const handleCreateInvoice = () => {
     navigate('/invoices/create');

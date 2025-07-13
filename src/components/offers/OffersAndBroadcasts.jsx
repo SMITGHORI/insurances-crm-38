@@ -8,7 +8,7 @@ import { Plus, Megaphone, Gift, BarChart3, History, Settings } from 'lucide-reac
 import BroadcastCreator from './BroadcastCreator';
 import BroadcastHistory from './BroadcastHistory';
 import OffersManager from '../communication/OffersManager';
-import { useBroadcasts, useOffers } from '@/hooks/useBroadcast';
+import { useBroadcasts, useOffers } from '@/hooks/useOffersAndBroadcasts';
 
 const OffersAndBroadcasts = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -17,15 +17,18 @@ const OffersAndBroadcasts = () => {
   const { data: broadcastsData } = useBroadcasts({ limit: 5 });
   const { data: offersData } = useOffers({ limit: 5 });
 
+  const broadcasts = broadcastsData?.data || [];
+  const offers = offersData?.data || [];
+
   const stats = {
-    totalBroadcasts: broadcastsData?.total || 0,
-    activeBroadcasts: broadcastsData?.data?.filter(b => b.status === 'sent').length || 0,
-    totalOffers: offersData?.total || 0,
-    activeOffers: offersData?.data?.filter(o => o.isActive).length || 0
+    totalBroadcasts: broadcastsData?.pagination?.totalItems || broadcasts.length || 0,
+    activeBroadcasts: broadcasts.filter(b => b.status === 'sent').length || 0,
+    totalOffers: offersData?.pagination?.totalItems || offers.length || 0,
+    activeOffers: offers.filter(o => o.isActive).length || 0
   };
 
-  const recentBroadcasts = broadcastsData?.data?.slice(0, 3) || [];
-  const recentOffers = offersData?.data?.slice(0, 3) || [];
+  const recentBroadcasts = broadcasts.slice(0, 3);
+  const recentOffers = offers.slice(0, 3);
 
   if (showBroadcastCreator) {
     return (

@@ -1,4 +1,3 @@
-
 const Quotation = require('../models/Quotation');
 const { responseHandler } = require('../utils/responseHandler');
 const { errorHandler } = require('../utils/errorHandler');
@@ -448,7 +447,7 @@ exports.searchQuotations = async (req, res) => {
   }
 };
 
-// Export quotations
+// Export quotations with enhanced error handling
 exports.exportQuotations = async (req, res) => {
   try {
     const { format = 'csv', filters = {} } = req.body;
@@ -510,6 +509,104 @@ exports.exportQuotations = async (req, res) => {
     }, 'Quotations exported successfully');
   } catch (error) {
     console.error('Error exporting quotations:', error);
+    errorHandler(error, req, res);
+  }
+};
+
+// Bulk update quotations
+exports.bulkUpdateQuotations = async (req, res) => {
+  try {
+    const { quotationIds, updateData } = req.body;
+    
+    if (!quotationIds || !Array.isArray(quotationIds) || quotationIds.length === 0) {
+      return responseHandler.error(res, 'quotationIds array is required', 400);
+    }
+
+    // Build filter for role-based access
+    const filter = { _id: { $in: quotationIds } };
+    const userRole = req.user.role?.name || req.user.role;
+    if (userRole === 'agent') {
+      filter.agentId = req.user.id;
+    }
+
+    const updatePayload = {
+      ...updateData,
+      updatedBy: req.user.id,
+      updatedAt: new Date()
+    };
+
+    const result = await Quotation.updateMany(filter, updatePayload);
+
+    responseHandler.success(res, {
+      modifiedCount: result.modifiedCount,
+      matchedCount: result.matchedCount
+    }, `${result.modifiedCount} quotations updated successfully`);
+  } catch (error) {
+    console.error('Error bulk updating quotations:', error);
+    errorHandler(error, req, res);
+  }
+};
+
+// Get quotations dashboard data
+exports.getQuotationsDashboard = async (req, res) => {
+  try {
+    const userRole = req.user.role?.name || req.user.role;
+    const baseFilter = {};
+    
+    if (userRole === 'agent') {
+      baseFilter.agentId = req.user.id;
+    }
+
+    const [
+      totalQuotations,
+      recentQuotations,
+      statusCounts,
+      monthlyStats
+    ] = await Promise.all([
+      Quotation.countDocuments(baseFilter),
+      
+      Quotation.find(baseFilter)
+        .populate('clientId', 'name email')
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean(),
+      
+      Quotation.aggregate([
+        { $match: baseFilter },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      
+      Quotation.aggregate([
+        {
+          $match: {
+            ...baseFilter,
+            createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+          }
+        },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            count: { $sum: 1 },
+            totalPremium: { $sum: '$premium' }
+          }
+        },
+        { $sort: { _id: 1 } }
+      ])
+    ]);
+
+    const statusMap = {};
+    statusCounts.forEach(stat => {
+      statusMap[stat._id] = stat.count;
+    });
+
+    responseHandler.success(res, {
+      totalQuotations,
+      recentQuotations,
+      statusBreakdown: statusMap,
+      monthlyStats
+    }, 'Dashboard data retrieved successfully');
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
     errorHandler(error, req, res);
   }
 };

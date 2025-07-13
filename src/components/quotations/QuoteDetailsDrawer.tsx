@@ -96,7 +96,7 @@ const QuoteDetailsDrawer: React.FC<QuoteDetailsDrawerProps> = ({
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-start">
-                  <CardTitle className="text-lg">{quote.carrier}</CardTitle>
+                  <CardTitle className="text-lg">{quote.insuranceCompany}</CardTitle>
                   <Badge className={getStatusColor(quote.status)}>
                     {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
                   </Badge>
@@ -109,13 +109,13 @@ const QuoteDetailsDrawer: React.FC<QuoteDetailsDrawerProps> = ({
                     <div className="text-lg font-semibold">{formatCurrency(quote.premium)}</div>
                   </div>
                   <div>
-                    <div className="text-sm text-gray-600">Coverage</div>
-                    <div className="text-lg font-semibold">{formatCurrency(quote.coverageAmount)}</div>
+                    <div className="text-sm text-gray-600">Sum Insured</div>
+                    <div className="text-lg font-semibold">{formatCurrency(quote.sumInsured)}</div>
                   </div>
                   <div>
                     <div className="text-sm text-gray-600">Value Score</div>
                     <div className="text-lg font-semibold">
-                      {quote.valueScore || calculateValueScore(quote.coverageAmount, quote.premium)}
+                      {quote.valueScore || calculateValueScore(quote.sumInsured, quote.premium)}
                     </div>
                   </div>
                   <div>
@@ -129,7 +129,7 @@ const QuoteDetailsDrawer: React.FC<QuoteDetailsDrawerProps> = ({
             </Card>
 
             {/* Risk Factors */}
-            {quote.riskProfile && (
+            {quote.riskProfile && Object.keys(quote.riskProfile).length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Risk Profile</CardTitle>
@@ -175,7 +175,7 @@ const QuoteDetailsDrawer: React.FC<QuoteDetailsDrawerProps> = ({
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">Cost per $1000 Coverage:</span>
                     <span className="font-mono">
-                      ${((quote.premium / quote.coverageAmount) * 1000).toFixed(2)}
+                      ${((quote.premium / quote.sumInsured) * 1000).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -227,13 +227,13 @@ const QuoteDetailsDrawer: React.FC<QuoteDetailsDrawerProps> = ({
                       </div>
                     </div>
                   )}
-                  {quote.approvedAt && (
+                  {quote.acceptedAt && (
                     <div className="flex items-center space-x-3">
                       <CheckCircle className="h-4 w-4 text-green-500" />
                       <div>
-                        <div className="text-sm font-medium">Quote Approved</div>
+                        <div className="text-sm font-medium">Quote Accepted</div>
                         <div className="text-xs text-gray-600">
-                          {format(new Date(quote.approvedAt), 'MMM dd, yyyy HH:mm')}
+                          {format(new Date(quote.acceptedAt), 'MMM dd, yyyy HH:mm')}
                         </div>
                       </div>
                     </div>
