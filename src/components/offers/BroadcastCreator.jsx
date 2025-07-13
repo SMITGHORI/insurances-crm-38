@@ -249,7 +249,7 @@ const BroadcastCreator = ({ onSuccess }) => {
                 rows={6}
               />
               <p className="text-xs text-gray-500">
-                Tip: Use {{`name`}} for personalization
+                Tip: Use {'{{name}}'} for personalization
               </p>
             </div>
 
