@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -162,9 +161,9 @@ const QuoteComparisonTable: React.FC<QuoteComparisonTableProps> = ({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Carrier</TableHead>
+                <TableHead>Insurance Company</TableHead>
                 <TableHead className="text-right">Premium</TableHead>
-                <TableHead className="text-right">Coverage</TableHead>
+                <TableHead className="text-right">Sum Insured</TableHead>
                 <TableHead className="text-right">Value Score</TableHead>
                 <TableHead>Valid Until</TableHead>
                 <TableHead>Status</TableHead>

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -85,10 +84,13 @@ const QuotesDashboard: React.FC = () => {
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
 
-  const { data: quotes = [], isLoading, error } = useQuotes(filters);
+  const { data: quotesResponse, isLoading, error } = useQuotes(filters);
   const bulkUpdateMutation = useBulkUpdateQuotes();
   const sendWhatsAppMutation = useSendWhatsApp();
   const sendEmailMutation = useSendEmail();
+
+  // Extract quotes array from response
+  const quotes = quotesResponse?.data || [];
 
   const activeFiltersCount = Object.values(filters).filter(
     (value, index) => value !== 'all' && (index !== 3 || value !== '')
@@ -280,9 +282,9 @@ const QuotesDashboard: React.FC = () => {
                   </TableHead>
                   <TableHead>Quote ID</TableHead>
                   <TableHead>Lead</TableHead>
-                  <TableHead>Carrier</TableHead>
+                  <TableHead>Insurance Company</TableHead>
                   <TableHead>Premium</TableHead>
-                  <TableHead>Coverage</TableHead>
+                  <TableHead>Sum Insured</TableHead>
                   <TableHead>Valid Until</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Commission</TableHead>
@@ -300,14 +302,15 @@ const QuotesDashboard: React.FC = () => {
                     </TableCell>
                     <TableCell className="font-medium">{quote.quoteId}</TableCell>
                     <TableCell>{quote.leadName}</TableCell>
-                    <TableCell>{quote.carrier}</TableCell>
+                    <TableCell>{quote.insuranceCompany}</TableCell>
                     <TableCell>{formatCurrency(quote.premium)}</TableCell>
-                    <TableCell>{formatCurrency(quote.coverageAmount)}</TableCell>
+                    <TableCell>{formatCurrency(quote.sumInsured)}</TableCell>
                     <TableCell>{formatDate(quote.validityEnd)}</TableCell>
                     <TableCell>{getStatusBadge(quote.status)}</TableCell>
                     <TableCell>
                       <Protected module="quotations" action="view_commission" fallback="---">
-                        {quote.commissionAmount ? formatCurrency(quote.commissionAmount) : '---'}
+                        {/* {quote.commissionAmount ? formatCurrency(quote.commissionAmount) : '---'} */}
+                        ---
                       </Protected>
                     </TableCell>
                     <TableCell>

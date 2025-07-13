@@ -32,6 +32,18 @@ export interface Quote {
     sumInsured?: number;
     premium: number;
   }>;
+  // Additional properties that were missing
+  carrier?: string;
+  coverageAmount?: number;
+  valueScore?: number;
+  riskProfile?: {
+    age?: number;
+    location?: string;
+    vehicleType?: string;
+    healthStatus?: string;
+  };
+  approvedAt?: string;
+  documentUrl?: string;
 }
 
 export const useQuotes = (params?: {
@@ -70,6 +82,13 @@ export const useQuotes = (params?: {
         updatedAt: quotation.updatedAt,
         notes: quotation.notes,
         products: quotation.products,
+        // Map additional properties
+        carrier: quotation.insuranceCompany,
+        coverageAmount: quotation.sumInsured,
+        valueScore: quotation.valueScore,
+        riskProfile: quotation.riskProfile,
+        approvedAt: quotation.approvedAt,
+        documentUrl: quotation.documentUrl,
       })) || [];
 
       return {
@@ -81,10 +100,6 @@ export const useQuotes = (params?: {
     staleTime: 2 * 60 * 1000, // 2 minutes
     retry: (failureCount, error) => {
       return failureCount < 2;
-    },
-    onError: (error: any) => {
-      console.error('Error fetching quotes:', error);
-      toast.error('Failed to load quotes');
     },
   });
 };
@@ -120,13 +135,16 @@ export const useQuoteById = (quoteId: string | null) => {
         updatedAt: response.updatedAt,
         notes: response.notes,
         products: response.products,
+        // Map additional properties
+        carrier: response.insuranceCompany,
+        coverageAmount: response.sumInsured,
+        valueScore: response.valueScore,
+        riskProfile: response.riskProfile,
+        approvedAt: response.approvedAt,
+        documentUrl: response.documentUrl,
       };
     },
     enabled: !!quoteId,
-    onError: (error: any) => {
-      console.error('Error fetching quote:', error);
-      toast.error('Failed to load quote details');
-    },
   });
 };
 
@@ -227,6 +245,45 @@ export const useBulkUpdateQuotes = () => {
     onError: (error: any) => {
       console.error('Error updating quotes:', error);
       toast.error(error.message || 'Failed to update quotes');
+    },
+  });
+};
+
+export const useExportQuotes = () => {
+  return useMutation({
+    mutationFn: async (quotes: Quote[]) => {
+      // Create CSV content
+      const headers = ['Quote ID', 'Client', 'Insurance Type', 'Premium', 'Sum Insured', 'Status', 'Valid Until'];
+      const csvContent = [
+        headers.join(','),
+        ...quotes.map(quote => [
+          quote.quoteId,
+          quote.clientName,
+          quote.insuranceType,
+          quote.premium,
+          quote.sumInsured,
+          quote.status,
+          quote.validUntil
+        ].join(','))
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `quotes_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
+    onSuccess: () => {
+      toast.success('Quotes exported successfully');
+    },
+    onError: (error: any) => {
+      console.error('Error exporting quotes:', error);
+      toast.error('Failed to export quotes');
     },
   });
 };
