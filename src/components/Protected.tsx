@@ -1,6 +1,6 @@
 
 import React, { ReactNode } from 'react';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import AccessDenied from './AccessDenied';
 
 /**

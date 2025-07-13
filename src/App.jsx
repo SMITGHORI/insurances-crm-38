@@ -5,13 +5,13 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
-import ClientsPage from './pages/ClientsPage';
-import AgentsPage from './pages/AgentsPage';
-import PoliciesPage from './pages/PoliciesPage';
-import ClaimsPage from './pages/ClaimsPage';
-import LeadsPage from './pages/LeadsPage';
-import QuotationsPage from './pages/QuotationsPage';
-import InvoicesPage from './pages/InvoicesPage';
+import ClientsPage from './pages/Clients';
+import AgentsPage from './pages/Agents';
+import PoliciesPage from './pages/Policies';
+import ClaimsPage from './pages/Claims';
+import LeadsPage from './pages/Leads';
+import QuotationsPage from './pages/Quotations';
+import InvoicesPage from './pages/Invoices';
 import Settings from './pages/Settings';
 import RecentActivities from './pages/RecentActivities';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -39,99 +39,97 @@ function AppContent() {
 
   return (
     <div className="App">
-      <PermissionsProvider>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/clients"
-                element={
-                  <ProtectedRoute module="clients" action="view">
-                    <ClientsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/agents"
-                element={
-                  <ProtectedRoute module="agents" action="view">
-                    <AgentsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/policies"
-                element={
-                  <ProtectedRoute module="policies" action="view">
-                    <PoliciesPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/claims"
-                element={
-                  <ProtectedRoute module="claims" action="view">
-                    <ClaimsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/leads"
-                element={
-                  <ProtectedRoute module="leads" action="view">
-                    <LeadsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/quotations"
-                element={
-                  <ProtectedRoute module="quotations" action="view">
-                    <QuotationsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/invoices"
-                element={
-                  <ProtectedRoute module="invoices" action="view">
-                    <InvoicesPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/recent-activities"
-                element={
-                  <ProtectedRoute module="activities" action="view">
-                    <RecentActivities />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/developer" element={<DeveloperPermissions />} />
-              <Route path="/access-denied" element={<AccessDenied />} />
-              <Route path="*" element={<AccessDenied />} />
-            </Routes>
-        </PermissionsProvider>
+      <Routes>
+        <Route path="/auth" element={<Auth />} />
+        <Route path="/" element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/clients"
+          element={
+            <ProtectedRoute module="clients" action="view">
+              <ClientsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/agents"
+          element={
+            <ProtectedRoute module="agents" action="view">
+              <AgentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/policies"
+          element={
+            <ProtectedRoute module="policies" action="view">
+              <PoliciesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/claims"
+          element={
+            <ProtectedRoute module="claims" action="view">
+              <ClaimsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/leads"
+          element={
+            <ProtectedRoute module="leads" action="view">
+              <LeadsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/quotations"
+          element={
+            <ProtectedRoute module="quotations" action="view">
+              <QuotationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoices"
+          element={
+            <ProtectedRoute module="invoices" action="view">
+              <InvoicesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/recent-activities"
+          element={
+            <ProtectedRoute module="activities" action="view">
+              <RecentActivities />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/developer" element={<DeveloperPermissions />} />
+        <Route path="/access-denied" element={<AccessDenied />} />
+        <Route path="*" element={<AccessDenied />} />
+      </Routes>
     </div>
   );
 }
@@ -140,7 +138,9 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <AppContent />
+        <PermissionsProvider>
+          <AppContent />
+        </PermissionsProvider>
       </AuthProvider>
     </Router>
   );

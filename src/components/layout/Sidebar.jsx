@@ -15,7 +15,7 @@ import {
   Clock,
   Gift
 } from 'lucide-react';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import { useRealtimePermissions } from '@/hooks/useRealtimePermissions';
 
 const Sidebar = ({ onNavItemClick }) => {
@@ -137,7 +137,10 @@ const Sidebar = ({ onNavItemClick }) => {
       {!isCollapsed && (
         <div className="px-4 py-2 border-b border-amba-lightblue/30">
           <span className="text-xs text-amba-lightblue/80 uppercase tracking-wide">
-            {userRole?.replace('_', ' ') || 'User'}
+            {typeof userRole === 'string' 
+              ? userRole.replace(/[_-]/g, ' ') 
+              : userRole?.name?.replace(/[_-]/g, ' ') || userRole?.displayName?.replace(/[_-]/g, ' ') || 'User'
+            }
           </span>
         </div>
       )}

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import { Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

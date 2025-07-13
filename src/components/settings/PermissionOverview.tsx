@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,10 @@ export const PermissionOverview: React.FC = () => {
             <div>
               <label className="text-sm font-medium text-gray-500">Role</label>
               <Badge variant="secondary" className="mt-1">
-                {userRole?.replace('_', ' ').toUpperCase()}
+                {typeof userRole === 'string' 
+                  ? userRole.replace(/[_-]/g, ' ').toUpperCase()
+                  : (userRole?.name || userRole?.displayName || userRole?.title || 'User').replace(/[_-]/g, ' ').toUpperCase()
+                }
               </Badge>
             </div>
             <div>
@@ -100,7 +103,7 @@ export const PermissionOverview: React.FC = () => {
       </Card>
 
       {/* Super Admin Actions */}
-      {userRole === 'super_admin' && (
+      {(typeof userRole === 'string' ? userRole : userRole?.name || userRole?.displayName || userRole?.title) === 'super_admin' && (
         <Card>
           <CardHeader>
             <CardTitle>Admin Actions</CardTitle>

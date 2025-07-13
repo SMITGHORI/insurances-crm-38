@@ -67,7 +67,7 @@ import QuotesFilters from './QuotesFilters';
 import WhatsAppSendDialog from './WhatsAppSendDialog';
 import EmailSendDialog from './EmailSendDialog';
 import QuoteUploadDialog from './QuoteUploadDialog';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import Protected from '@/components/Protected';
 import { toast } from 'sonner';
 

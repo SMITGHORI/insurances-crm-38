@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 
 // Auth and Layout
 import { AuthProvider } from './contexts/AuthContext';
+import { PermissionsProvider } from './contexts/PermissionsContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/layout/MainLayout.jsx';
 import Auth from './pages/Auth';
@@ -13,12 +14,14 @@ import Auth from './pages/Auth';
 // Pages
 import Dashboard from './pages/Dashboard';
 import Clients from './pages/Clients';
+import ClientDetailsView from './pages/ClientDetailsView';
 import Quotations from './pages/Quotations';
 import Invoices from './pages/Invoices';
 import Communication from './pages/Communication';
 import Policies from './pages/Policies';
 import Settings from './pages/Settings';
 import OffersAndBroadcasts from './components/offers/OffersAndBroadcasts';
+import DeveloperPermissions from './components/developer/DeveloperPermissions';
 
 const queryClient = new QueryClient();
 
@@ -27,7 +30,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <AuthProvider>
-          <Toaster />
+          <PermissionsProvider>
+            <Toaster />
           
           <Routes>
             <Route path="/login" element={<Auth />} />
@@ -45,6 +49,12 @@ function App() {
               <Route path="clients" element={
                 <ProtectedRoute module="clients" action="view">
                   <Clients />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="clients/:id" element={
+                <ProtectedRoute module="clients" action="view">
+                  <ClientDetailsView />
                 </ProtectedRoute>
               } />
               
@@ -84,7 +94,11 @@ function App() {
                 </ProtectedRoute>
               } />
             </Route>
+            
+            {/* Developer Route - Outside protected layout */}
+            <Route path="/developer" element={<DeveloperPermissions />} />
           </Routes>
+          </PermissionsProvider>
         </AuthProvider>
       </Router>
     </QueryClientProvider>

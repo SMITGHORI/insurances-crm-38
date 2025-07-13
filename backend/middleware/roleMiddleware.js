@@ -12,7 +12,8 @@ const roleMiddleware = (allowedRoles) => {
         return next(new AppError('Authentication required', 401));
       }
 
-      if (!allowedRoles.includes(req.user.role)) {
+      const userRole = req.user.role?.name || req.user.role;
+      if (!allowedRoles.includes(userRole)) {
         return next(new AppError('You do not have permission to perform this action', 403));
       }
 
@@ -61,7 +62,8 @@ const ownershipMiddleware = (resourceIdField = 'userId') => {
       }
 
       // Admin users can access any resource
-      if (req.user.role === 'super_admin' || req.user.role === 'admin') {
+      const userRole = req.user.role?.name || req.user.role;
+      if (userRole === 'super_admin' || userRole === 'admin') {
         return next();
       }
 

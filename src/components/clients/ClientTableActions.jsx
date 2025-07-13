@@ -12,7 +12,7 @@ import {
 import { MoreHorizontal } from 'lucide-react';
 import Protected from '@/components/Protected';
 import { PermissionTooltip } from '@/components/ui/permission-tooltip';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 
 const ClientTableActions = ({ 
   client, 
@@ -26,7 +26,8 @@ const ClientTableActions = ({
 }) => {
   const { hasPermission } = usePermissions();
   const isAssignedAgent = client.assignedAgentId === userId;
-  const isAgent = userRole === 'agent';
+  const userRoleName = typeof userRole === 'string' ? userRole : userRole?.name || userRole?.displayName || userRole?.title;
+  const isAgent = userRoleName === 'agent';
   
   // Determine if actions are available based on role and assignment
   const canEditClient = canEdit && (!isAgent || isAssignedAgent) && hasPermission('clients', 'edit');

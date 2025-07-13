@@ -118,7 +118,8 @@ export const AuthProvider = ({ children }) => {
 
   const hasPermission = (module, action) => {
     if (!user) return false;
-    if (user.role === 'super_admin') return true;
+    const userRoleName = typeof user.role === 'string' ? user.role : user.role?.name || user.role?.displayName || user.role?.title;
+    if (userRoleName === 'super_admin') return true;
 
     // Check flat permissions first (optimized)
     if (user.flatPermissions?.includes(`${module}:${action}`)) {
@@ -132,7 +133,8 @@ export const AuthProvider = ({ children }) => {
 
   const hasAnyPermission = (permissionList) => {
     if (!user) return false;
-    if (user.role === 'super_admin') return true;
+    const userRoleName = typeof user.role === 'string' ? user.role : user.role?.name || user.role?.displayName || user.role?.title;
+    if (userRoleName === 'super_admin') return true;
 
     return permissionList.some(permission => {
       if (typeof permission === 'string') {
@@ -147,16 +149,19 @@ export const AuthProvider = ({ children }) => {
 
   const isSameBranch = (recordBranch) => {
     if (!user || !recordBranch) return true;
-    if (user.role === 'super_admin' || user.role === 'admin') return true;
+    const userRoleName = typeof user.role === 'string' ? user.role : user.role?.name || user.role?.displayName || user.role?.title;
+    if (userRoleName === 'super_admin' || userRoleName === 'admin') return true;
     return user.branch === recordBranch;
   };
 
   const isSuperAdmin = () => {
-    return user?.role === 'super_admin';
+    const userRoleName = typeof user?.role === 'string' ? user.role : user?.role?.name || user?.role?.displayName || user?.role?.title;
+    return userRoleName === 'super_admin';
   };
 
   const isAgent = () => {
-    return user?.role === 'agent';
+    const userRoleName = typeof user?.role === 'string' ? user.role : user?.role?.name || user?.role?.displayName || user?.role?.title;
+    return userRoleName === 'agent';
   };
 
   const value = {

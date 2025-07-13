@@ -125,12 +125,17 @@ const developerAuth = async (req, res, next) => {
     
     const { email, password } = req.body;
     
-    // Hardcoded credentials for initial developer access
+    // Developer credentials from environment variables
     const HARDCODED_DEVELOPER = {
-      email: 'info@smeetghori.in',
-      password: 'Smeet@123',
-      name: 'Smeet Ghori'
+      email: process.env.DEVELOPER_EMAIL,
+      password: process.env.DEVELOPER_PASSWORD,
+      name: process.env.DEVELOPER_NAME || 'Developer'
     };
+    
+    // Validate environment variables are set
+    if (!HARDCODED_DEVELOPER.email || !HARDCODED_DEVELOPER.password) {
+      throw new AppError('Developer credentials not configured in environment variables', 500);
+    }
     
     let developerData;
     

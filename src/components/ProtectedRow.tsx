@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 
 interface ProtectedRowProps {
   /** The branch of the record */

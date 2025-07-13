@@ -23,7 +23,11 @@ const app = express();
 
 // Enable CORS
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:8080',
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:8080',
+    'http://localhost:8081',
+    'http://localhost:3000'
+  ],
   credentials: true
 }));
 
@@ -96,6 +100,8 @@ app.use('/api/claims', require('./routes/claims'));
 app.use('/api/agents', require('./routes/agents'));
 app.use('/api/activities', require('./routes/activities'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/header', require('./routes/header'));
+app.use('/api/developer', require('./routes/developerRoutes'));
 
 // Error handling middleware
 app.use(errorHandler);

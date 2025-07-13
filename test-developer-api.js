@@ -5,9 +5,19 @@ const fetch = require('node-fetch');
 
 const API_BASE = 'http://localhost:5000/api/developer';
 const CREDENTIALS = {
-  email: 'info@smeetghori.in',
-  password: 'Smeet@123'
+  email: process.env.DEVELOPER_EMAIL || '',
+  password: process.env.DEVELOPER_PASSWORD || ''
 };
+
+// Check if credentials are provided
+if (!CREDENTIALS.email || !CREDENTIALS.password) {
+  console.error('❌ Error: Developer credentials not provided!');
+  console.log('Please set environment variables:');
+  console.log('  DEVELOPER_EMAIL=your-email');
+  console.log('  DEVELOPER_PASSWORD=your-password');
+  console.log('\nExample: DEVELOPER_EMAIL=dev@example.com DEVELOPER_PASSWORD=yourpass node test-developer-api.js');
+  process.exit(1);
+}
 
 // Helper function to make API calls
 async function apiCall(endpoint, method = 'GET', body = null) {

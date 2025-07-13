@@ -36,9 +36,28 @@ import { toast } from 'sonner';
 const DeveloperPermissions = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [credentials, setCredentials] = useState({ 
-    email: 'info@smeetghori.in', 
-    password: 'Smeet@123' 
+    email: '', 
+    password: '' 
   });
+  
+  // Developer credentials from environment variables
+  const DEVELOPER_CREDENTIALS = {
+    email: import.meta.env.VITE_DEVELOPER_EMAIL || '',
+    password: import.meta.env.VITE_DEVELOPER_PASSWORD || ''
+  };
+  
+  // Function to auto-fill developer credentials
+  const fillDeveloperCredentials = () => {
+    if (DEVELOPER_CREDENTIALS.email && DEVELOPER_CREDENTIALS.password) {
+      setCredentials({
+        email: DEVELOPER_CREDENTIALS.email,
+        password: DEVELOPER_CREDENTIALS.password
+      });
+      toast.success('Developer credentials loaded');
+    } else {
+      toast.error('Developer credentials not configured');
+    }
+  };
   const [authToken, setAuthToken] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -421,6 +440,19 @@ const DeveloperPermissions = () => {
                   </Button>
                 </div>
               </div>
+              
+              {/* Auto-fill developer credentials button */}
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full" 
+                onClick={fillDeveloperCredentials}
+                disabled={loading}
+              >
+                <Shield className="h-4 w-4 mr-2" />
+                Load Developer Credentials
+              </Button>
+              
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Key className="h-4 w-4 mr-2" />}
                 Authenticate

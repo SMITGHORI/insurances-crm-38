@@ -25,7 +25,10 @@ export const useActivities = (params = {}) => {
   return useQuery({
     queryKey: activitiesQueryKeys.list(params),
     queryFn: () => recentActivitiesApi.getActivities(params),
-    enabled: user?.role === 'super_admin',
+    enabled: (() => {
+      const userRoleName = typeof user?.role === 'string' ? user.role : user?.role?.name || user?.role?.displayName || user?.role?.title;
+      return userRoleName === 'super_admin';
+    })(),
     staleTime: 30 * 1000, // 30 seconds
     retry: 2,
     onError: (error) => {
@@ -44,7 +47,10 @@ export const useActivity = (activityId) => {
   return useQuery({
     queryKey: activitiesQueryKeys.detail(activityId),
     queryFn: () => recentActivitiesApi.getActivityById(activityId),
-    enabled: !!activityId && user?.role === 'super_admin',
+    enabled: !!activityId && (() => {
+      const userRoleName = typeof user?.role === 'string' ? user.role : user?.role?.name || user?.role?.displayName || user?.role?.title;
+      return userRoleName === 'super_admin';
+    })(),
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 2,
     onError: (error) => {
@@ -63,7 +69,10 @@ export const useActivityStats = (timeframe = '24h') => {
   return useQuery({
     queryKey: activitiesQueryKeys.stats(timeframe),
     queryFn: () => recentActivitiesApi.getActivityStats({ timeframe }),
-    enabled: user?.role === 'super_admin',
+    enabled: (() => {
+      const userRoleName = typeof user?.role === 'string' ? user.role : user?.role?.name || user?.role?.displayName || user?.role?.title;
+      return userRoleName === 'super_admin';
+    })(),
     staleTime: 2 * 60 * 1000, // 2 minutes
     retry: 2,
     onError: (error) => {
@@ -82,7 +91,10 @@ export const useActivityFilters = () => {
   return useQuery({
     queryKey: activitiesQueryKeys.filters(),
     queryFn: () => recentActivitiesApi.getFilterValues(),
-    enabled: user?.role === 'super_admin',
+    enabled: (() => {
+      const userRoleName = typeof user?.role === 'string' ? user.role : user?.role?.name || user?.role?.displayName || user?.role?.title;
+      return userRoleName === 'super_admin';
+    })(),
     staleTime: 10 * 60 * 1000, // 10 minutes
     retry: 2,
     onError: (error) => {
@@ -101,7 +113,10 @@ export const useActivitySearch = (query) => {
   return useQuery({
     queryKey: activitiesQueryKeys.search(query),
     queryFn: () => recentActivitiesApi.searchActivities(query),
-    enabled: !!query && query.length >= 2 && user?.role === 'super_admin',
+    enabled: !!query && query.length >= 2 && (() => {
+      const userRoleName = typeof user?.role === 'string' ? user.role : user?.role?.name || user?.role?.displayName || user?.role?.title;
+      return userRoleName === 'super_admin';
+    })(),
     staleTime: 30 * 1000, // 30 seconds
     retry: 2,
     onError: (error) => {

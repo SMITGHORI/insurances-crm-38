@@ -83,7 +83,9 @@ const ProfileDropdown = () => {
   };
 
   const getRoleBadgeVariant = (role) => {
-    switch (role) {
+    const roleName = typeof role === 'string' ? role : role?.name || role?.displayName || role?.title || '';
+    
+    switch (roleName) {
       case 'super_admin':
         return 'destructive';
       case 'manager':
@@ -96,7 +98,16 @@ const ProfileDropdown = () => {
   };
 
   const formatRole = (role) => {
-    return role?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'User';
+    if (typeof role === 'string') {
+      return role.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+    
+    if (typeof role === 'object' && role !== null) {
+      const roleName = role.name || role.displayName || role.title || '';
+      return roleName.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+    
+    return 'User';
   };
 
   const currentUser = profileData || user;
@@ -191,7 +202,10 @@ const ProfileDropdown = () => {
           <span>Recent Activity</span>
         </DropdownMenuItem>
 
-        {(currentUser.role === 'super_admin' || currentUser.role === 'manager') && (
+        {(() => {
+          const roleName = typeof currentUser.role === 'string' ? currentUser.role : currentUser.role?.name || currentUser.role?.displayName || currentUser.role?.title;
+          return (roleName === 'super_admin' || roleName === 'manager');
+        })() && (
           <DropdownMenuItem 
             onClick={() => navigate('/settings')} 
             className="cursor-pointer"

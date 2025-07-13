@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import Protected from '@/components/Protected';
 import QuotesDashboard from '@/components/quotes/QuotesDashboard';
 

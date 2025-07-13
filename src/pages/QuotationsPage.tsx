@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import QuoteForm from '@/components/quotations/QuoteForm';
 import QuoteComparisonTable from '@/components/quotations/QuoteComparisonTable';

@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Download, FileText, CheckCircle, MoreHorizontal, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import Protected from '@/components/Protected';
 import ProtectedRow from '@/components/ProtectedRow';
 import { useUpdateQuoteStatus, useExportQuotes, Quote } from '@/hooks/useQuotes';

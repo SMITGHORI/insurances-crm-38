@@ -197,7 +197,10 @@ export const useSettingsStats = () => {
   return useQuery({
     queryKey: settingsQueryKeys.stats(),
     queryFn: () => settingsBackendApi.getSettingsStats(),
-    enabled: user?.role === 'super_admin',
+    enabled: (() => {
+      const userRoleName = typeof user?.role === 'string' ? user.role : user?.role?.name || user?.role?.displayName || user?.role?.title;
+      return userRoleName === 'super_admin';
+    })(),
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 2,
     onError: (error) => {

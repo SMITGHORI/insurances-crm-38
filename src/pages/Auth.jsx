@@ -10,8 +10,8 @@ import { toast } from 'sonner';
 import { Shield, Users, TrendingUp, Award, Info } from 'lucide-react';
 
 const Auth = () => {
-  const [email, setEmail] = useState('admin@gmail.com');
-  const [password, setPassword] = useState('admin@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();

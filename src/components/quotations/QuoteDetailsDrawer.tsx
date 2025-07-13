@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { CheckCircle, Download, FileText, Clock, User, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import Protected from '@/components/Protected';
 import { useQuoteById, useUpdateQuoteStatus } from '@/hooks/useQuotes';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';

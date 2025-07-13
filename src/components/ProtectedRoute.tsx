@@ -2,7 +2,7 @@
 import React, { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import AccessDenied from './AccessDenied';
 import { toast } from 'sonner';
