@@ -3,312 +3,152 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Role = require('../models/Role');
-const { AppError } = require('../utils/errorHandler');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
+const { AppError } = require('../utils/errorHandler');
 
-/**
- * Generate JWT token
- * @param {Object} user - User object
- * @returns {String} JWT token
- */
+// Generate JWT Token
 const generateToken = (user) => {
   const payload = {
     userId: user._id,
     email: user.email,
-    name: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}`.trim() : user.name || user.email,
-    role: typeof user.role === 'object' ? user.role.name : user.role,
-    branch: user.branch || 'main',
-    permissions: user.permissions || [],
+    name: user.name,
+    role: user.role,
+    branch: user.branch,
+    permissions: user.role.permissions || [],
     flatPermissions: user.flatPermissions || []
   };
-  
-  return jwt.sign(
-    payload,
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
-  );
+
+  return jwt.sign(payload, process.env.JWT_SECRET || 'your-secret-key', {
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+  });
 };
 
-/**
- * User login
- * @route POST /api/auth/login
- * @access Public
- */
-const login = async (req, res) => {
+// Login Controller
+const login = async (req, res, next) => {
   try {
-    console.log('=== LOGIN ATTEMPT ===');
-    console.log('Request body:', req.body);
     const { email, password } = req.body;
+
+    console.log('Login attempt for:', email);
 
     // Validate input
     if (!email || !password) {
-      console.log('Missing credentials');
-      return res.status(400).json({
-        success: false,
-        message: 'Email and password are required'
-      });
+      return errorResponse(res, 'Email and password are required', 400);
     }
 
-    let user;
-    let isDbConnected = true;
-
-    try {
-      // Try to find user in database with timeout
-      const dbPromise = User.findOne({ email }).select('+password').populate('role');
-      user = await Promise.race([
-        dbPromise,
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Database timeout')), 5000)
-        )
-      ]);
-    } catch (dbError) {
-      console.log('Database connection failed, using fallback authentication');
-      isDbConnected = false;
-      
-      // Fallback authentication for development
-      if (email === 'admin@gmail.com' && password === 'admin@123') {
-        user = {
-          _id: 'admin-fallback-id',
-          email: 'admin@gmail.com',
-          firstName: 'Admin',
-          lastName: 'User',
-          role: 'super_admin',
-          branch: 'main',
-          isActive: true,
-          flatPermissions: [
-            // Clients module
-            'clients:view', 'clients:create', 'clients:edit', 'clients:delete', 'clients:export', 'clients:edit_sensitive',
-            // Leads module
-            'leads:view', 'leads:create', 'leads:edit', 'leads:delete', 'leads:export',
-            // Quotations module
-            'quotations:view', 'quotations:create', 'quotations:edit', 'quotations:delete', 'quotations:export',
-            // Policies module
-            'policies:view', 'policies:create', 'policies:edit', 'policies:delete', 'policies:approve', 'policies:export', 'policies:edit_sensitive',
-            // Claims module
-            'claims:view', 'claims:create', 'claims:edit', 'claims:delete', 'claims:approve', 'claims:export', 'claims:edit_status',
-            // Invoices module
-            'invoices:view', 'invoices:create', 'invoices:edit', 'invoices:delete', 'invoices:export',
-            // Agents module
-            'agents:view', 'agents:create', 'agents:edit', 'agents:delete', 'agents:export',
-            // Activities module
-            'activities:view', 'activities:create', 'activities:edit', 'activities:delete', 'activities:export',
-            // Offers module
-            'offers:view', 'offers:create', 'offers:edit', 'offers:delete', 'offers:export',
-            // Reports module
-            'reports:view', 'reports:export',
-            // Settings module
-            'settings:view', 'settings:edit', 'settings:export',
-            // Dashboard and general permissions
-            'view_dashboard', 'manage_users', 'manage_roles', 'system_admin'
-          ]
-        };
-      } else if (email === 'agent@gmail.com' && password === 'agent123') {
-        user = {
-          _id: 'agent-fallback-id',
-          email: 'agent@gmail.com',
-          firstName: 'Test',
-          lastName: 'Agent',
-          role: 'agent',
-          branch: 'branch1',
-          isActive: true,
-          flatPermissions: ['view_dashboard', 'view_reports', 'manage_policies']
-        };
-      }
-    }
+    // Find user with populated role
+    const user = await User.findOne({ email: email.toLowerCase() })
+      .populate('role')
+      .select('+password');
 
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
+      console.log('User not found:', email);
+      return errorResponse(res, 'Invalid email or password', 401);
     }
 
-    // For database users, perform additional checks
-    if (isDbConnected) {
-      // Check if account is locked
-      if (user.isLocked) {
-        return res.status(423).json({
-          success: false,
-          message: 'Account is temporarily locked due to too many failed login attempts. Please try again later.'
-        });
-      }
-
-      // Check if account is inactive
-      if (!user.isActive) {
-        return res.status(401).json({
-          success: false,
-          message: 'Account is deactivated. Please contact administrator.'
-        });
-      }
-
-      // Verify password for database users
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
-        // Increment login attempts
-        try {
-          await user.incLoginAttempts();
-        } catch (e) {
-          console.log('Could not increment login attempts:', e.message);
-        }
-        
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid credentials'
-        });
-      }
-
-      // Reset login attempts on successful login
-      if (user.loginAttempts > 0) {
-        try {
-          await User.findByIdAndUpdate(user._id, {
-            $unset: { loginAttempts: 1, lockUntil: 1 }
-          });
-        } catch (e) {
-          console.log('Could not reset login attempts:', e.message);
-        }
-      }
-
-      // Update last login and activity
-      try {
-        user.lastLogin = new Date();
-        user.lastActivity = new Date();
-        await user.save();
-      } catch (e) {
-        console.log('Could not update user activity:', e.message);
-      }
+    // Check if user is active
+    if (!user.isActive) {
+      console.log('User account deactivated:', email);
+      return errorResponse(res, 'Account is deactivated', 401);
     }
 
-    // Generate JWT token
+    // Verify password
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+      console.log('Invalid password for:', email);
+      return errorResponse(res, 'Invalid email or password', 401);
+    }
+
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+
+    // Generate token
     const token = generateToken(user);
 
-    // Remove sensitive data from response
-    const userResponse = isDbConnected ? user.toObject() : user;
+    // Remove password from response
+    const userResponse = user.toJSON();
     delete userResponse.password;
-    delete userResponse.loginAttempts;
-    delete userResponse.lockUntil;
 
-    res.json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        user: userResponse,
-        token,
-        permissions: user.flatPermissions || []
-      }
-    });
+    console.log('Login successful for:', email);
+
+    return successResponse(res, {
+      token,
+      user: userResponse
+    }, 'Login successful');
 
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-};
-
-/**
- * User logout
- * @route POST /api/auth/logout
- * @access Private
- */
-const logout = async (req, res, next) => {
-  try {
-    const userId = req.user._id;
-    
-    // Update user's last activity
-    await User.findByIdAndUpdate(userId, {
-      lastActivity: new Date(),
-      isOnline: false
-    });
-    
-    // In a production environment, you might want to:
-    // 1. Blacklist the JWT token
-    // 2. Clear any active sessions from a session store
-    // 3. Log the logout activity
-    
-    successResponse(res, { message: 'Logged out successfully' }, 200);
-  } catch (error) {
     next(error);
   }
 };
 
-/**
- * Check authentication status
- * @route GET /api/auth/me
- * @access Private
- */
+// Get authenticated user
 const getAuthenticatedUser = async (req, res, next) => {
   try {
-    // req.user is already populated by authMiddleware
-    // We need to populate the role field for complete user data
     const user = await User.findById(req.user._id)
-      .select('-password')
       .populate('role')
-      .lean();
-    
+      .select('-password');
+
     if (!user) {
-      throw new AppError('User not found', 404);
+      return errorResponse(res, 'User not found', 404);
     }
-    
-    res.status(200).json({
-      success: true,
-      message: 'User authenticated',
-      data: user,
-      timestamp: new Date().toISOString()
-    });
+
+    return successResponse(res, user, 'User retrieved successfully');
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * Refresh user session
- * @route POST /api/auth/refresh
- * @access Private
- */
+// Logout controller
+const logout = async (req, res, next) => {
+  try {
+    // In a stateless JWT system, logout is handled client-side
+    return successResponse(res, null, 'Logged out successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Refresh session
 const refreshSession = async (req, res, next) => {
   try {
-    const userId = req.user._id;
-    
-    // Update last activity
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { 
-        lastActivity: new Date(),
-        isOnline: true 
-      },
-      { new: true }
-    ).select('-password');
-    
-    successResponse(res, { message: 'Session refreshed', data: user }, 200);
+    const user = await User.findById(req.user._id)
+      .populate('role')
+      .select('-password');
+
+    if (!user) {
+      return errorResponse(res, 'User not found', 404);
+    }
+
+    const token = generateToken(user);
+
+    return successResponse(res, {
+      token,
+      user: user.toJSON()
+    }, 'Session refreshed successfully');
   } catch (error) {
     next(error);
   }
 };
 
-// Refresh user permissions
+// Refresh permissions
 const refreshPermissions = async (req, res, next) => {
   try {
-    const userId = req.user._id;
-    
-    // Get updated user with latest permissions
-    const user = await User.findById(userId)
-      .select('-password')
+    const user = await User.findById(req.user._id)
       .populate('role')
-      .lean();
-    
+      .select('-password');
+
     if (!user) {
-      throw new AppError('User not found', 404);
+      return errorResponse(res, 'User not found', 404);
     }
-    
-    // Generate new token with updated permissions
+
     const token = generateToken(user);
-    
-    res.status(200).json({
-      success: true,
-      message: 'Permissions refreshed successfully',
-      token
-    });
+
+    return successResponse(res, {
+      token,
+      permissions: user.role.permissions,
+      flatPermissions: user.flatPermissions
+    }, 'Permissions refreshed successfully');
   } catch (error) {
     next(error);
   }

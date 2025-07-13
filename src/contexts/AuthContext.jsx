@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { API_CONFIG } from '../config/api';
@@ -30,7 +31,7 @@ export const AuthProvider = ({ children }) => {
             
             if (decoded.exp * 1000 > Date.now()) {
               const userData = {
-                id: decoded.sub || decoded.userId,
+                id: decoded.userId,
                 email: decoded.email,
                 name: decoded.name,
                 role: decoded.role,
@@ -70,7 +71,10 @@ export const AuthProvider = ({ children }) => {
 
       const response = await fetch(`${API_CONFIG.BASE_URL}/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ email, password })
       });
 
@@ -81,13 +85,21 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('authToken', data.data.token);
         
         const decoded = jwtDecode(data.data.token);
-        const userData = transformUserData(data.data.user);
+        const userData = {
+          id: decoded.userId,
+          email: decoded.email,
+          name: decoded.name,
+          role: decoded.role,
+          branch: decoded.branch,
+          permissions: decoded.permissions || [],
+          flatPermissions: decoded.flatPermissions || []
+        };
         
         setUser(userData);
-        console.log('Backend login successful');
+        console.log('Login successful, user set:', userData);
         return { success: true };
       } else {
-        console.log('Backend login failed:', data.message);
+        console.log('Login failed:', data.message);
         return { success: false, error: data.message || 'Login failed' };
       }
     } catch (error) {
@@ -98,52 +110,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Helper function to transform user data from backend
-  const transformUserData = (userData) => {
-    return {
-      id: userData._id || userData.id,
-      email: userData.email,
-      name: userData.name || `${userData.firstName} ${userData.lastName}`.trim(),
-      role: userData.role?.name || userData.role,
-      branch: userData.branch || 'main',
-      permissions: userData.permissions || [],
-      flatPermissions: userData.flatPermissions || []
-    };
-  };
-
   const logout = async () => {
     console.log('Logging out...');
     localStorage.removeItem('authToken');
     setUser(null);
-  };
-
-  const refreshPermissions = async () => {
-    const token = localStorage.getItem('authToken');
-    if (!token || !user) return;
-
-
-
-    try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/auth/refresh-permissions`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.token) {
-          localStorage.setItem('authToken', data.token);
-          const decoded = jwtDecode(data.token);
-          
-          setUser(prevUser => ({
-            ...prevUser,
-            permissions: decoded.permissions || [],
-            flatPermissions: decoded.flatPermissions || []
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('Error refreshing permissions:', error);
-    }
   };
 
   const hasPermission = (module, action) => {
@@ -185,7 +155,6 @@ export const AuthProvider = ({ children }) => {
     return user?.role === 'super_admin';
   };
 
-  // Add this new function
   const isAgent = () => {
     return user?.role === 'agent';
   };
@@ -195,12 +164,11 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
-    refreshPermissions,
     hasPermission,
     hasAnyPermission,
     isSameBranch,
     isSuperAdmin,
-    isAgent, // Add this to the exported value
+    isAgent,
     isAuthenticated: !!user
   };
 
