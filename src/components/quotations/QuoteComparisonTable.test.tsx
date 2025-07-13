@@ -45,27 +45,33 @@ const mockQuotes = [
     leadName: 'John Doe',
     clientId: 'CL000001',
     clientName: 'John Doe',
-    carrier: 'State Farm',
-    type: 'Health Insurance',
+    insuranceCompany: 'State Farm',
+    insuranceType: 'Health Insurance',
     premium: 1000,
-    coverageAmount: 100000,
-    planName: 'Health Plus',
-    validityStart: '2025-01-01',
-    validityEnd: '2025-12-31',
+    sumInsured: 100000,
     validUntil: '2025-12-31',
-    insuranceType: 'Health Insurance' as const,
     status: 'sent' as const,
     agentId: '1',
     agentName: 'Agent Smith',
-    branch: 'main',
     createdAt: '2025-01-01',
     updatedAt: '2025-01-01',
-    commissionAmount: 100,
-    emailSent: true,
-    whatsappSent: false,
     valueScore: 100,
     documentUrl: 'https://example.com/doc.pdf',
-    followUpReminders: [],
+    // Additional properties to match interface
+    carrier: 'State Farm',
+    coverageAmount: 100000,
+    riskProfile: {
+      age: 30,
+      location: 'New York',
+      healthStatus: 'Good'
+    },
+    approvedAt: undefined,
+    sentAt: '2025-01-01',
+    viewedAt: undefined,
+    acceptedAt: undefined,
+    rejectedAt: undefined,
+    notes: '',
+    products: []
   },
   {
     id: '2',
@@ -74,26 +80,33 @@ const mockQuotes = [
     leadName: 'Jane Smith',
     clientId: 'CL000002',
     clientName: 'Jane Smith',
-    carrier: 'Geico',
-    type: 'Motor Insurance',
+    insuranceCompany: 'Geico',
+    insuranceType: 'Motor Insurance',
     premium: 800,
-    coverageAmount: 80000,
-    planName: 'Motor Plus',
-    validityStart: '2025-01-01',
-    validityEnd: '2025-11-30',
+    sumInsured: 80000,
     validUntil: '2025-11-30',
-    insuranceType: 'Motor Insurance' as const,
     status: 'draft' as const,
     agentId: '1',
     agentName: 'Agent Smith',
-    branch: 'north',
     createdAt: '2025-01-02',
     updatedAt: '2025-01-02',
-    commissionAmount: 80,
-    emailSent: false,
-    whatsappSent: false,
     valueScore: 100,
-    followUpReminders: [],
+    // Additional properties to match interface
+    carrier: 'Geico',
+    coverageAmount: 80000,
+    riskProfile: {
+      age: 25,
+      location: 'California',
+      vehicleType: 'Sedan'
+    },
+    approvedAt: undefined,
+    sentAt: undefined,
+    viewedAt: undefined,
+    acceptedAt: undefined,
+    rejectedAt: undefined,
+    notes: '',
+    products: [],
+    documentUrl: undefined
   },
 ];
 
@@ -133,7 +146,7 @@ describe('QuoteComparisonTable Component', () => {
     vi.mocked(usePermissions).mockReturnValue({
       hasPermission: vi.fn(() => true),
       hasAnyPermission: vi.fn(() => true),
-      isSameBranch: vi.fn((branch) => branch === 'main'),
+      isSameBranch: vi.fn((branch) => branch === 'LD000001'),
       userBranch: 'main',
       userRole: 'agent',
       userPermissions: []
@@ -148,7 +161,7 @@ describe('QuoteComparisonTable Component', () => {
       { wrapper: createWrapper() }
     );
 
-    // Should show State Farm (main branch) but not Geico (north branch)
+    // Should show State Farm (LD000001 branch) but not Geico (LD000002 branch)
     expect(screen.getByText('State Farm')).toBeInTheDocument();
     expect(screen.queryByText('Geico')).not.toBeInTheDocument();
   });
