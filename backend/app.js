@@ -83,11 +83,34 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 // Error handling middleware
 app.use(errorHandler);
 
-// Start server
+// Start server with WebSocket support
+const http = require('http');
+const WebSocketManager = require('./middleware/websocket');
+const activityWebSocket = require('./services/activityWebSocket');
+
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
+const WS_PORT = process.env.WS_PORT || 5000;
+
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize WebSocket services
+WebSocketManager.initialize(server);
+activityWebSocket.initialize(server);
+
+// Start the main server
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// Start WebSocket server on separate port if specified
+if (WS_PORT !== PORT) {
+  const wsServer = http.createServer();
+  WebSocketManager.initialize(wsServer);
+  wsServer.listen(WS_PORT, () => {
+    console.log(`WebSocket server running on port ${WS_PORT}`);
+  });
+}
 
 // Export the app
 module.exports = app;

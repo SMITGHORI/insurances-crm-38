@@ -11,9 +11,19 @@ const { successResponse, errorResponse } = require('../utils/responseHandler');
  * @param {Object} user - User object
  * @returns {String} JWT token
  */
-const generateToken = (userId) => {
+const generateToken = (user) => {
+  const payload = {
+    userId: user._id,
+    email: user.email,
+    name: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}`.trim() : user.name || user.email,
+    role: typeof user.role === 'object' ? user.role.name : user.role,
+    branch: user.branch || 'main',
+    permissions: user.permissions || [],
+    flatPermissions: user.flatPermissions || []
+  };
+  
   return jwt.sign(
-    { userId },
+    payload,
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
   );
@@ -169,7 +179,7 @@ const login = async (req, res) => {
     }
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
     // Remove sensitive data from response
     const userResponse = isDbConnected ? user.toObject() : user;
@@ -276,9 +286,38 @@ const refreshSession = async (req, res, next) => {
   }
 };
 
+// Refresh user permissions
+const refreshPermissions = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    
+    // Get updated user with latest permissions
+    const user = await User.findById(userId)
+      .select('-password')
+      .populate('role')
+      .lean();
+    
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+    
+    // Generate new token with updated permissions
+    const token = generateToken(user);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Permissions refreshed successfully',
+      token
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   login,
   logout,
   getAuthenticatedUser,
-  refreshSession
+  refreshSession,
+  refreshPermissions
 };

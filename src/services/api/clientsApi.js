@@ -1,8 +1,9 @@
 
 import { toast } from 'sonner';
+import { API_CONFIG, API_ENDPOINTS } from '../../config/api.js';
 
 // Base API configuration for MongoDB backend
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = API_CONFIG.BASE_URL;
 
 /**
  * Unified Clients API Service for MongoDB Integration
@@ -10,7 +11,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
  */
 class ClientsApiService {
   constructor() {
-    this.baseURL = `${API_BASE_URL}/clients`;
+    this.baseURL = `${API_BASE_URL}${API_ENDPOINTS.CLIENTS}`;
   }
 
   /**

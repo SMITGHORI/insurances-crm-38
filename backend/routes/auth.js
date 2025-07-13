@@ -10,7 +10,8 @@ const {
   login,
   logout,
   getAuthenticatedUser,
-  refreshSession
+  refreshSession,
+  refreshPermissions
 } = require('../controllers/authController');
 
 /**
@@ -48,6 +49,16 @@ router.get('/me',
 router.post('/refresh',
   authMiddleware,
   refreshSession
+);
+
+/**
+ * @route   GET /api/auth/refresh-permissions
+ * @desc    Refresh user permissions and return new token
+ * @access  Private
+ */
+router.get('/refresh-permissions',
+  authMiddleware,
+  refreshPermissions
 );
 
 module.exports = router;

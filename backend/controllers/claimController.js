@@ -994,6 +994,132 @@ const getPolicyDetails = async (req, res) => {
   }
 };
 
+// Upload document for claim
+const uploadDocument = async (req, res) => {
+  try {
+    res.status(501).json({
+      success: false,
+      message: 'Document upload functionality not implemented yet',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload document',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// Get claim documents
+const getClaimDocuments = async (req, res) => {
+  try {
+    res.status(501).json({
+      success: false,
+      message: 'Get documents functionality not implemented yet',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get documents',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// Delete document
+const deleteDocument = async (req, res) => {
+  try {
+    res.status(501).json({
+      success: false,
+      message: 'Delete document functionality not implemented yet',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete document',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// Get claims aging report
+const getClaimsAgingReport = async (req, res) => {
+  try {
+    res.status(501).json({
+      success: false,
+      message: 'Aging report functionality not implemented yet',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate aging report',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// Get settlement report
+const getSettlementReport = async (req, res) => {
+  try {
+    res.status(501).json({
+      success: false,
+      message: 'Settlement report functionality not implemented yet',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate settlement report',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// Download template
+const downloadTemplate = async (req, res) => {
+  try {
+    res.status(501).json({
+      success: false,
+      message: 'Download template functionality not implemented yet',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to download template',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// Import claims
+const importClaims = async (req, res) => {
+  try {
+    res.status(501).json({
+      success: false,
+      message: 'Import claims functionality not implemented yet',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to import claims',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
 module.exports = {
   getAllClaims,
   getClaimById,
@@ -1003,12 +1129,19 @@ module.exports = {
   updateClaimStatus,
   addNote,
   getClaimNotes,
+  uploadDocument,
+  getClaimDocuments,
+  deleteDocument,
   searchClaims,
   getClaimsStats,
   getDashboardStats,
+  getClaimsAgingReport,
+  getSettlementReport,
   bulkUpdateClaims,
   bulkAssignClaims,
   exportClaims,
+  downloadTemplate,
+  importClaims,
   getPoliciesForClaim,
   getClientsForClaim,
   getPolicyDetails

@@ -32,12 +32,6 @@ const Dashboard = () => {
   useEffect(() => {
     console.log('Dashboard mounted, setting up real-time listeners');
     
-    // Trigger initial data load
-    if (!overview && !isLoading) {
-      console.log('No overview data, triggering initial load');
-      refetch.overview();
-    }
-
     // Listen for browser connectivity changes
     const handleOnline = () => {
       console.log('Browser back online, refreshing dashboard');
@@ -61,7 +55,7 @@ const Dashboard = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [overview, isLoading, refreshDashboard, refetch]);
+  }, [refreshDashboard]);
 
   // Handle manual refresh
   const handleRefresh = async () => {

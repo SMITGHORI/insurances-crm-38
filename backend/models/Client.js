@@ -7,7 +7,7 @@ const ClientSchema = new Schema({
   clientId: {
     type: String,
     unique: true,
-    required: true
+    required: false // Will be auto-generated in pre-save hook
   },
   clientType: {
     type: String,
@@ -251,8 +251,16 @@ ClientSchema.index({
   clientId: 'text'
 });
 
-// Pre-save middleware to generate name field
+// Pre-save middleware to generate clientId and name field
 ClientSchema.pre('save', function(next) {
+  // Generate clientId if not provided
+  if (!this.clientId) {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substr(2, 5);
+    this.clientId = `CL${timestamp}${random}`.toUpperCase();
+  }
+  
+  // Generate name field based on client type
   if (this.clientType === 'individual') {
     this.name = `${this.firstName || ''} ${this.lastName || ''}`.trim();
   } else if (this.clientType === 'corporate') {

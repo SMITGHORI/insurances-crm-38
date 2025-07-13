@@ -1,8 +1,9 @@
 
 import { toast } from 'sonner';
+import { API_CONFIG } from '../../config/api.js';
 
 // Base API configuration for dashboard operations
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = API_CONFIG.BASE_URL;
 
 /**
  * Enhanced Dashboard API Service with proper MongoDB integration
@@ -11,19 +12,14 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 class DashboardApiService {
   constructor() {
     this.baseURL = `${API_BASE_URL}/dashboard`;
-    this.abortController = null;
   }
 
   /**
-   * Generic API request handler with enhanced error handling
+   * Enhanced request method with proper error handling and abort support
    */
   async request(endpoint, options = {}) {
-    // Abort previous request if still pending
-    if (this.abortController) {
-      this.abortController.abort();
-    }
-    
-    this.abortController = new AbortController();
+    // Create a new AbortController for each request to avoid conflicts
+    const abortController = new AbortController();
     
     const url = endpoint.startsWith('http') ? endpoint : `${this.baseURL}${endpoint}`;
     
@@ -32,7 +28,7 @@ class DashboardApiService {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      signal: this.abortController.signal,
+      signal: abortController.signal,
       ...options,
     };
 
@@ -70,6 +66,13 @@ class DashboardApiService {
   async getDashboardOverview() {
     try {
       const response = await this.request('/overview');
+      if (!response) {
+        return {
+          success: false,
+          data: null,
+          timestamp: new Date().toISOString()
+        };
+      }
       return {
         success: true,
         data: response.data,
@@ -88,6 +91,13 @@ class DashboardApiService {
   async getRecentActivities(limit = 10) {
     try {
       const response = await this.request(`/activities?limit=${limit}`);
+      if (!response) {
+        return {
+          success: false,
+          data: [],
+          timestamp: new Date().toISOString()
+        };
+      }
       return {
         success: true,
         data: response.data || [],
@@ -106,6 +116,13 @@ class DashboardApiService {
   async getPerformanceMetrics(period = '30d') {
     try {
       const response = await this.request(`/performance?period=${period}`);
+      if (!response) {
+        return {
+          success: false,
+          data: null,
+          timestamp: new Date().toISOString()
+        };
+      }
       return {
         success: true,
         data: response.data,
@@ -124,6 +141,13 @@ class DashboardApiService {
   async getChartsData(type = 'all') {
     try {
       const response = await this.request(`/charts?type=${type}`);
+      if (!response) {
+        return {
+          success: false,
+          data: null,
+          timestamp: new Date().toISOString()
+        };
+      }
       return {
         success: true,
         data: response.data,
@@ -142,6 +166,13 @@ class DashboardApiService {
   async getQuickActions() {
     try {
       const response = await this.request('/quick-actions');
+      if (!response) {
+        return {
+          success: false,
+          data: null,
+          timestamp: new Date().toISOString()
+        };
+      }
       return {
         success: true,
         data: response.data,
