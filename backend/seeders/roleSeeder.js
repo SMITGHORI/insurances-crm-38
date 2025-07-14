@@ -7,8 +7,12 @@ const seedRoles = async () => {
   try {
     console.log('Seeding roles...');
 
-    // Clear existing roles
-    await Role.deleteMany({});
+    // Check if roles already exist
+    const existingRoles = await Role.countDocuments();
+    if (existingRoles > 0) {
+      console.log('Roles already exist, skipping role creation...');
+      return await Role.find();
+    }
 
     // Create default roles
     const roles = [
@@ -96,6 +100,13 @@ const seedUsers = async () => {
   try {
     console.log('Seeding users...');
 
+    // Check if users already exist
+    const existingUsers = await User.countDocuments();
+    if (existingUsers > 0) {
+      console.log('Users already exist, skipping user creation...');
+      return await User.find().populate('role');
+    }
+
     // Get roles
     const superAdminRole = await Role.findOne({ name: 'super_admin' });
     const agentRole = await Role.findOne({ name: 'agent' });
@@ -104,15 +115,16 @@ const seedUsers = async () => {
       throw new Error('Roles not found. Please run role seeder first.');
     }
 
-    // Clear existing users
-    await User.deleteMany({});
+    // Hash passwords
+    const adminPasswordHash = await bcrypt.hash('admin123', 12);
+    const agentPasswordHash = await bcrypt.hash('agent123', 12);
 
     // Create default users
     const users = [
       {
         name: 'Super Admin',
         email: 'admin@gmail.com',
-        password: 'admin123',
+        password: adminPasswordHash,
         role: superAdminRole._id,
         branch: 'main',
         isActive: true,
@@ -121,7 +133,7 @@ const seedUsers = async () => {
       {
         name: 'Test Agent',
         email: 'agent@gmail.com',
-        password: 'agent123',
+        password: agentPasswordHash,
         role: agentRole._id,
         branch: 'main',
         isActive: true,
@@ -147,7 +159,10 @@ const seedDatabase = async () => {
     const users = await seedUsers();
     
     console.log('Database seeding completed successfully!');
-    console.log(`Created ${roles.length} roles and ${users.length} users`);
+    console.log(`Roles: ${roles.length}, Users: ${users.length}`);
+    console.log('Test credentials:');
+    console.log('Admin: admin@gmail.com / admin123');
+    console.log('Agent: agent@gmail.com / agent123');
     
     return { roles, users };
   } catch (error) {

@@ -1,108 +1,114 @@
 
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'sonner';
-
-// Auth and Layout
-import { AuthProvider } from './contexts/AuthContext';
-import { PermissionsProvider } from './contexts/PermissionsContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import MainLayout from './components/layout/MainLayout.jsx';
-import Auth from './pages/Auth';
-
-// Pages
-import Dashboard from './pages/Dashboard';
-import Clients from './pages/Clients';
-import ClientDetailsView from './pages/ClientDetailsView';
-import Quotations from './pages/Quotations';
-import Invoices from './pages/Invoices';
-import Communication from './pages/Communication';
-import Policies from './pages/Policies';
-import Settings from './pages/Settings';
-import OffersAndBroadcasts from './components/offers/OffersAndBroadcasts';
-import DeveloperPermissions from './components/developer/DeveloperPermissions';
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { PermissionsProvider } from "@/contexts/PermissionsContext";
+import RouteGuard from "@/components/RouteGuard";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import Index from "./pages/Index";
+import Auth from "./pages/Auth";
+import Dashboard from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <Router>
-        <AuthProvider>
-          <PermissionsProvider>
-            <Toaster />
-          
-          <Routes>
-            <Route path="/login" element={<Auth />} />
-            <Route path="/auth" element={<Auth />} />
-            
-            {/* Protected Routes */}
-            <Route path="/" element={
-              <ProtectedRoute>
-                <MainLayout />
-              </ProtectedRoute>
-            }>
-              <Route index element={<Dashboard />} />
-              <Route path="dashboard" element={<Dashboard />} />
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <AuthProvider>
+        <PermissionsProvider>
+          <Toaster />
+          <BrowserRouter>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/auth" element={<Auth />} />
               
-              <Route path="clients" element={
-                <ProtectedRoute module="clients" action="view">
-                  <Clients />
-                </ProtectedRoute>
+              {/* Protected Routes */}
+              <Route path="/" element={
+                <RouteGuard>
+                  <Index />
+                </RouteGuard>
               } />
               
-              <Route path="clients/:id" element={
-                <ProtectedRoute module="clients" action="view">
-                  <ClientDetailsView />
-                </ProtectedRoute>
+              <Route path="/dashboard" element={
+                <RouteGuard>
+                  <Dashboard />
+                </RouteGuard>
               } />
               
-              <Route path="quotations" element={
-                <ProtectedRoute module="quotations" action="view">
-                  <Quotations />
-                </ProtectedRoute>
+              {/* Add more protected routes as needed */}
+              <Route path="/clients" element={
+                <RouteGuard>
+                  <ProtectedRoute module="clients" action="view">
+                    <div className="p-8">
+                      <h1 className="text-2xl font-bold">Clients Module</h1>
+                      <p>Client management functionality goes here</p>
+                    </div>
+                  </ProtectedRoute>
+                </RouteGuard>
               } />
               
-              <Route path="invoices" element={
-                <ProtectedRoute module="invoices" action="view">
-                  <Invoices />
-                </ProtectedRoute>
+              <Route path="/policies" element={
+                <RouteGuard>
+                  <ProtectedRoute module="policies" action="view">
+                    <div className="p-8">
+                      <h1 className="text-2xl font-bold">Policies Module</h1>
+                      <p>Policy management functionality goes here</p>
+                    </div>
+                  </ProtectedRoute>
+                </RouteGuard>
               } />
               
-              <Route path="communication" element={
-                <ProtectedRoute module="communication" action="view">
-                  <Communication />
-                </ProtectedRoute>
+              <Route path="/leads" element={
+                <RouteGuard>
+                  <ProtectedRoute module="leads" action="view">
+                    <div className="p-8">
+                      <h1 className="text-2xl font-bold">Leads Module</h1>
+                      <p>Lead management functionality goes here</p>
+                    </div>
+                  </ProtectedRoute>
+                </RouteGuard>
               } />
               
-              <Route path="offers-broadcasts" element={
-                <ProtectedRoute module="offers" action="view">
-                  <OffersAndBroadcasts />
-                </ProtectedRoute>
+              <Route path="/claims" element={
+                <RouteGuard>
+                  <ProtectedRoute module="claims" action="view">
+                    <div className="p-8">
+                      <h1 className="text-2xl font-bold">Claims Module</h1>
+                      <p>Claims management functionality goes here</p>
+                    </div>
+                  </ProtectedRoute>
+                </RouteGuard>
               } />
               
-              <Route path="policies" element={
-                <ProtectedRoute module="policies" action="view">
-                  <Policies />
-                </ProtectedRoute>
+              <Route path="/quotations" element={
+                <RouteGuard>
+                  <ProtectedRoute module="quotations" action="view">
+                    <div className="p-8">
+                      <h1 className="text-2xl font-bold">Quotations Module</h1>
+                      <p>Quotation management functionality goes here</p>
+                    </div>
+                  </ProtectedRoute>
+                </RouteGuard>
               } />
               
-              <Route path="settings" element={
-                <ProtectedRoute module="settings" action="manage">
-                  <Settings />
-                </ProtectedRoute>
+              <Route path="/offers" element={
+                <RouteGuard>
+                  <ProtectedRoute module="offers" action="view">
+                    <div className="p-8">
+                      <h1 className="text-2xl font-bold">Offers & Broadcasts</h1>
+                      <p>Offers and broadcast management functionality goes here</p>
+                    </div>
+                  </ProtectedRoute>
+                </RouteGuard>
               } />
-            </Route>
-            
-            {/* Developer Route - Outside protected layout */}
-            <Route path="/developer" element={<DeveloperPermissions />} />
-          </Routes>
-          </PermissionsProvider>
-        </AuthProvider>
-      </Router>
-    </QueryClientProvider>
-  );
-}
+            </Routes>
+          </BrowserRouter>
+        </PermissionsProvider>
+      </AuthProvider>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;

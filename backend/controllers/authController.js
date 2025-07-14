@@ -12,9 +12,9 @@ const generateToken = (user) => {
     userId: user._id,
     email: user.email,
     name: user.name,
-    role: user.role,
+    role: user.role?.name || user.role,
     branch: user.branch,
-    permissions: user.role.permissions || [],
+    permissions: user.role?.permissions || [],
     flatPermissions: user.flatPermissions || []
   };
 
@@ -35,7 +35,7 @@ const login = async (req, res, next) => {
       return errorResponse(res, 'Email and password are required', 400);
     }
 
-    // Find user with populated role
+    // Find user with populated role and select password
     const user = await User.findOne({ email: email.toLowerCase() })
       .populate('role')
       .select('+password');
@@ -146,8 +146,8 @@ const refreshPermissions = async (req, res, next) => {
 
     return successResponse(res, {
       token,
-      permissions: user.role.permissions,
-      flatPermissions: user.flatPermissions
+      permissions: user.role?.permissions || [],
+      flatPermissions: user.flatPermissions || []
     }, 'Permissions refreshed successfully');
   } catch (error) {
     next(error);
