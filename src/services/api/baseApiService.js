@@ -1,13 +1,18 @@
 
+import { API_CONFIG } from '../../config/api';
+
 /**
- * Base API Service for MongoDB backend integration
+ * Base API service class with common functionality
  */
 class BaseApiService {
   constructor(baseEndpoint) {
-    this.baseURL = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}${baseEndpoint}`;
+    this.baseURL = `${API_CONFIG.BASE_URL}${baseEndpoint}`;
   }
 
-  async makeRequest(endpoint = '', options = {}) {
+  /**
+   * Generic API request handler with error handling
+   */
+  async request(endpoint = '', options = {}) {
     const url = endpoint.startsWith('http') ? endpoint : `${this.baseURL}${endpoint}`;
     
     const config = {
@@ -18,14 +23,18 @@ class BaseApiService {
       ...options,
     };
 
+    // Add authorization token
     const token = localStorage.getItem('authToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
     try {
+      console.log(`API Request: ${config.method || 'GET'} ${url}`);
       const response = await fetch(url, config);
+      
       const responseData = await response.json();
+      console.log(`API Response:`, responseData);
       
       if (!response.ok) {
         throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
@@ -34,46 +43,68 @@ class BaseApiService {
       return responseData;
     } catch (error) {
       console.error('API Request failed:', error.message);
+      
+      // Handle auth errors
+      if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        localStorage.removeItem('authToken');
+        window.location.href = '/auth';
+      }
+      
       throw error;
     }
   }
 
-  async getAll(params = {}) {
-    const queryParams = new URLSearchParams();
-    Object.keys(params).forEach(key => {
-      if (params[key] !== undefined && params[key] !== null) {
-        queryParams.append(key, params[key]);
-      }
+  /**
+   * GET request
+   */
+  async get(endpoint = '', params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const url = queryString ? `${endpoint}?${queryString}` : endpoint;
+    
+    return this.request(url, {
+      method: 'GET',
     });
-
-    const queryString = queryParams.toString();
-    const endpoint = queryString ? `?${queryString}` : '';
-    return this.makeRequest(endpoint);
   }
 
-  async getById(id) {
-    return this.makeRequest(`/${id}`);
-  }
-
-  async create(data) {
-    return this.makeRequest('', {
+  /**
+   * POST request
+   */
+  async post(endpoint = '', data = {}) {
+    return this.request(endpoint, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async update(id, data) {
-    return this.makeRequest(`/${id}`, {
+  /**
+   * PUT request
+   */
+  async put(endpoint = '', data = {}) {
+    return this.request(endpoint, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
-  async delete(id) {
-    return this.makeRequest(`/${id}`, {
+  /**
+   * DELETE request
+   */
+  async delete(endpoint = '') {
+    return this.request(endpoint, {
       method: 'DELETE',
     });
   }
 }
+
+// Create service instances for different modules
+export const clientsApi = new BaseApiService('/clients');
+export const leadsApi = new BaseApiService('/leads');
+export const quotationsApi = new BaseApiService('/quotations');
+export const policiesApi = new BaseApiService('/policies');
+export const claimsApi = new BaseApiService('/claims');
+export const offersApi = new BaseApiService('/offers');
+export const agentsApi = new BaseApiService('/agents');
+export const reportsApi = new BaseApiService('/reports');
+export const settingsApi = new BaseApiService('/settings');
 
 export default BaseApiService;

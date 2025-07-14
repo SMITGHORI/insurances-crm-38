@@ -1,71 +1,54 @@
 
 const express = require('express');
 const router = express.Router();
-const dashboardController = require('../controllers/dashboardController');
 const authMiddleware = require('../middleware/auth');
-const { roleMiddleware } = require('../middleware/roleMiddleware');
 
 // Apply authentication to all routes
 router.use(authMiddleware);
 
 /**
- * @route GET /api/dashboard/overview
- * @desc Get dashboard overview with role-based data
- * @access Private (All roles with filtered data)
+ * @route   GET /api/dashboard/stats
+ * @desc    Get dashboard statistics
+ * @access  Private
  */
-router.get('/overview', 
-  roleMiddleware(['super_admin', 'manager', 'agent']),
-  dashboardController.getDashboardOverview
-);
+router.get('/stats', async (req, res) => {
+  try {
+    // Mock dashboard data - replace with actual database queries
+    const stats = {
+      totalClients: 150,
+      totalPolicies: 89,
+      totalClaims: 23,
+      totalRevenue: 450000,
+      recentActivities: [
+        {
+          id: 1,
+          type: 'client_added',
+          message: 'New client John Doe added',
+          timestamp: new Date(),
+          user: req.user.name
+        },
+        {
+          id: 2,
+          type: 'policy_created',
+          message: 'Policy POL-2024-001 created',
+          timestamp: new Date(),
+          user: req.user.name
+        }
+      ]
+    };
 
-/**
- * @route GET /api/dashboard/activities
- * @desc Get recent activities with role-based filtering
- * @access Private (All roles)
- */
-router.get('/activities', 
-  roleMiddleware(['super_admin', 'manager', 'agent']),
-  dashboardController.getRecentActivities
-);
-
-/**
- * @route GET /api/dashboard/performance
- * @desc Get performance metrics
- * @access Private (All roles)
- */
-router.get('/performance', 
-  roleMiddleware(['super_admin', 'manager', 'agent']),
-  dashboardController.getPerformanceMetrics
-);
-
-/**
- * @route GET /api/dashboard/charts
- * @desc Get charts data for visualization
- * @access Private (All roles)
- */
-router.get('/charts', 
-  roleMiddleware(['super_admin', 'manager', 'agent']),
-  dashboardController.getChartsData
-);
-
-/**
- * @route GET /api/dashboard/quick-actions
- * @desc Get quick actions data
- * @access Private (All roles)
- */
-router.get('/quick-actions', 
-  roleMiddleware(['super_admin', 'manager', 'agent']),
-  dashboardController.getQuickActions
-);
-
-/**
- * @route POST /api/dashboard/refresh
- * @desc Refresh dashboard data
- * @access Private (All roles)
- */
-router.post('/refresh', 
-  roleMiddleware(['super_admin', 'manager', 'agent']),
-  dashboardController.refreshDashboard
-);
+    res.json({
+      success: true,
+      data: stats,
+      message: 'Dashboard stats retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving dashboard stats'
+    });
+  }
+});
 
 module.exports = router;

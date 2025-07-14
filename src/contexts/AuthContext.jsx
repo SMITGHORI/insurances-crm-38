@@ -112,8 +112,61 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     console.log('Logging out...');
-    localStorage.removeItem('authToken');
-    setUser(null);
+    
+    try {
+      // Call logout endpoint
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        await fetch(`${API_CONFIG.BASE_URL}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      localStorage.removeItem('authToken');
+      setUser(null);
+    }
+  };
+
+  const refreshPermissions = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_CONFIG.BASE_URL}/auth/refresh-permissions`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (data.success && data.data?.token) {
+        localStorage.setItem('authToken', data.data.token);
+        
+        const decoded = jwtDecode(data.data.token);
+        const userData = {
+          id: decoded.userId,
+          email: decoded.email,
+          name: decoded.name,
+          role: decoded.role,
+          branch: decoded.branch,
+          permissions: decoded.permissions || [],
+          flatPermissions: decoded.flatPermissions || []
+        };
+        
+        setUser(userData);
+        return userData;
+      }
+    } catch (error) {
+      console.error('Refresh permissions error:', error);
+    }
+    return null;
   };
 
   const hasPermission = (module, action) => {
@@ -169,6 +222,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
+    refreshPermissions,
     hasPermission,
     hasAnyPermission,
     isSameBranch,

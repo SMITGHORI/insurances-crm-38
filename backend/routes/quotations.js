@@ -1,156 +1,111 @@
 
 const express = require('express');
 const router = express.Router();
-
-// Import middleware
 const authMiddleware = require('../middleware/auth');
-const { roleMiddleware, ownershipMiddleware } = require('../middleware/roleMiddleware');
-const { validationMiddleware } = require('../middleware/validation');
+const { requirePermission } = require('../middleware/rbac');
 
-// Import validation schemas
-const {
-  createQuotationSchema,
-  updateQuotationSchema,
-  sendQuotationSchema,
-  statusUpdateSchema,
-  queryParamsSchema
-} = require('../validations/quotationValidation');
-const { quotationExportValidation } = require('../validations/exportValidation');
-
-// Import controllers
-const {
-  getQuotations,
-  getQuotationById,
-  createQuotation,
-  updateQuotation,
-  deleteQuotation,
-  sendQuotation,
-  updateQuotationStatus,
-  getQuotationsStats,
-  searchQuotations,
-  exportQuotations
-} = require('../controllers/quotationController');
-
-// Apply authentication middleware to all routes
+// Apply authentication to all routes
 router.use(authMiddleware);
+
+// Mock data for now
+let quotations = [];
 
 /**
  * @route   GET /api/quotations
- * @desc    Get all quotations with filtering and pagination
- * @access  Private (All authenticated users)
- * @query   page, limit, status, insuranceType, agentId, clientId, search, sortBy, sortOrder
+ * @desc    Get all quotations
+ * @access  Private
  */
-router.get('/',
-  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
-  validationMiddleware(queryParamsSchema, 'query'),
-  getQuotations
-);
-
-/**
- * @route   POST /api/quotations/export
- * @desc    Export quotations data
- * @access  Private (All roles with role-based filtering)
- */
-router.post('/export',
-  roleMiddleware(['manager', 'admin', 'super_admin']),
-  validationMiddleware(quotationExportValidation),
-  exportQuotations
-);
-
-/**
- * @route   GET /api/quotations/stats
- * @desc    Get quotations statistics
- * @access  Private (All authenticated users)
- * @query   period, agentId
- */
-router.get('/stats',
-  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
-  getQuotationsStats
-);
-
-/**
- * @route   GET /api/quotations/search/:query
- * @desc    Search quotations by text
- * @access  Private (All authenticated users)
- * @param   query - Search query string
- * @query   limit
- */
-router.get('/search/:query',
-  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
-  searchQuotations
-);
+router.get('/', requirePermission('quotations', 'view'), (req, res) => {
+  try {
+    let filteredQuotations = quotations;
+    
+    // Filter by agent if user is an agent
+    if (req.user.role.name === 'agent') {
+      filteredQuotations = quotations.filter(quote => 
+        quote.assignedAgentId === req.user._id.toString() || 
+        quote.branch === req.user.branch
+      );
+    }
+    
+    res.json({
+      success: true,
+      data: filteredQuotations,
+      total: filteredQuotations.length,
+      message: 'Quotations retrieved successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving quotations'
+    });
+  }
+});
 
 /**
  * @route   POST /api/quotations
- * @desc    Create a new quotation
- * @access  Private (Agents, Managers, Super Admin)
- * @body    Quotation data according to createQuotationSchema
+ * @desc    Create new quotation
+ * @access  Private
  */
-router.post('/',
-  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
-  validationMiddleware(createQuotationSchema),
-  createQuotation
-);
-
-/**
- * @route   GET /api/quotations/:id
- * @desc    Get quotation by ID
- * @access  Private (All authenticated users)
- * @param   id - Quotation ID
- */
-router.get('/:id',
-  roleMiddleware(['agent', 'manager', 'admin', 'super_admin']),
-  getQuotationById
-);
+router.post('/', requirePermission('quotations', 'create'), (req, res) => {
+  try {
+    const newQuotation = {
+      id: Date.now().toString(),
+      quotationNumber: `QT-${Date.now()}`,
+      ...req.body,
+      createdBy: req.user._id,
+      branch: req.user.branch,
+      status: 'draft',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    quotations.push(newQuotation);
+    
+    res.status(201).json({
+      success: true,
+      data: newQuotation,
+      message: 'Quotation created successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error creating quotation'
+    });
+  }
+});
 
 /**
  * @route   PUT /api/quotations/:id
  * @desc    Update quotation
- * @access  Private (Agents can update own quotations, Managers/Super Admin can update all)
- * @param   id - Quotation ID
- * @body    Quotation update data according to updateQuotationSchema
+ * @access  Private
  */
-router.put('/:id',
-  roleMiddleware(['agent', 'manager', 'super_admin']),
-  validationMiddleware(updateQuotationSchema),
-  updateQuotation
-);
-
-/**
- * @route   DELETE /api/quotations/:id
- * @desc    Delete quotation
- * @access  Private (Managers, Super Admin only)
- * @param   id - Quotation ID
- */
-router.delete('/:id',
-  roleMiddleware(['manager', 'super_admin']),
-  deleteQuotation
-);
-
-/**
- * @route   POST /api/quotations/:id/send
- * @desc    Send quotation via email
- * @access  Private (Agents can send own quotations, Managers/Super Admin can send all)
- * @param   id - Quotation ID
- * @body    Email data according to sendQuotationSchema
- */
-router.post('/:id/send',
-  roleMiddleware(['agent', 'manager', 'super_admin']),
-  validationMiddleware(sendQuotationSchema),
-  sendQuotation
-);
-
-/**
- * @route   PUT /api/quotations/:id/status
- * @desc    Update quotation status
- * @access  Private (Agents can update own quotations, Managers/Super Admin can update all)
- * @param   id - Quotation ID
- * @body    Status data according to statusUpdateSchema
- */
-router.put('/:id/status',
-  roleMiddleware(['agent', 'manager', 'super_admin']),
-  validationMiddleware(statusUpdateSchema),
-  updateQuotationStatus
-);
+router.put('/:id', requirePermission('quotations', 'edit'), (req, res) => {
+  try {
+    const quotationIndex = quotations.findIndex(q => q.id === req.params.id);
+    if (quotationIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Quotation not found'
+      });
+    }
+    
+    quotations[quotationIndex] = {
+      ...quotations[quotationIndex],
+      ...req.body,
+      updatedAt: new Date()
+    };
+    
+    res.json({
+      success: true,
+      data: quotations[quotationIndex],
+      message: 'Quotation updated successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error updating quotation'
+    });
+  }
+});
 
 module.exports = router;

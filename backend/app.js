@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -102,6 +101,9 @@ app.use('/api/activities', require('./routes/activities'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/header', require('./routes/header'));
 app.use('/api/developer', require('./routes/developerRoutes'));
+app.use('/api/offers', require('./routes/offers'));
+app.use('/api/leads', require('./routes/leads'));
+app.use('/api/quotations', require('./routes/quotations'));
 
 // Error handling middleware
 app.use(errorHandler);
