@@ -21,12 +21,16 @@ describe('AccessDenied Component', () => {
     return render(<BrowserRouter>{component}</BrowserRouter>);
   };
 
+  beforeEach(() => {
+    mockNavigate.mockClear();
+  });
+
   it('renders default message and home button', () => {
     const { getByText } = renderWithRouter(<AccessDenied />);
 
     expect(getByText('Access Denied')).toBeDefined();
     expect(getByText("You don't have permission to access this resource.")).toBeDefined();
-    expect(getByText('Return to Dashboard')).toBeDefined();
+    expect(getByText('Go to Dashboard')).toBeDefined();
   });
 
   it('renders custom message when provided', () => {
@@ -39,25 +43,22 @@ describe('AccessDenied Component', () => {
   it('hides home button when showHomeButton is false', () => {
     const { queryByText } = renderWithRouter(<AccessDenied showHomeButton={false} />);
 
-    expect(queryByText('Return to Dashboard')).toBeNull();
-  });
-
-  it('calls custom onHomeClick when provided', async () => {
-    const user = userEvent.setup();
-    const mockOnHomeClick = vi.fn();
-    const { getByText } = renderWithRouter(
-      <AccessDenied onHomeClick={mockOnHomeClick} />
-    );
-
-    await user.click(getByText('Return to Dashboard'));
-    expect(mockOnHomeClick).toHaveBeenCalled();
+    expect(queryByText('Go to Dashboard')).toBeNull();
   });
 
   it('navigates to dashboard when home button clicked', async () => {
     const user = userEvent.setup();
     const { getByText } = renderWithRouter(<AccessDenied />);
 
-    await user.click(getByText('Return to Dashboard'));
+    await user.click(getByText('Go to Dashboard'));
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('navigates back when go back button clicked', async () => {
+    const user = userEvent.setup();
+    const { getByText } = renderWithRouter(<AccessDenied />);
+
+    await user.click(getByText('Go Back'));
+    expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
 });
